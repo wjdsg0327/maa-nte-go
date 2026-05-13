@@ -1,0 +1,77 @@
+{
+  "领取": {
+    "recognition": "DirectHit",
+    "action": "ClickKey",
+    "key": 27,
+    "next": ["领取_点击都市大亨"]
+
+  },
+  "领取_点击都市大亨": {
+    "recognition": "TemplateMatch",
+    "template": "都市大亨.png",
+    "action": "Click",
+    "next": ["领取_咖舍"]
+  },
+  "领取_咖舍": {
+    "recognition": "TemplateMatch",
+    "template": "咖舍.png",
+    "action": "Click",
+    "next": ["领取_提取收益"]
+  },
+  "领取_提取收益": {
+    "recognition": "TemplateMatch",
+    "template": "提取收益.png",
+    "action": "Click",
+    "next": ["领取_确定"]
+  },
+  "领取_确定": {
+    "recognition": "OCR",
+    "expected": "确定",
+    "action": "Click",
+    "save_result": true,
+    "next": ["领取_点击空白区域关闭"]
+  },
+  "领取_点击空白区域关闭":{
+    "recognition": "OCR",
+    "expected": "点击空白区域关闭",
+    "action": "Click",
+    "save_result": true,
+    "next": ["领取_补货"]
+  },
+  "领取_补货": {
+    "recognition": "TemplateMatch",
+    "template": "补货.png",
+    "action": "Click",
+    "next": ["领取_72小时"]
+  },
+  "领取_72小时": {
+    "recognition": "OCR",
+    "expected": "72小时",
+    "threshold": 0.5,
+    "save_result": true,
+    "action": "Click",
+    "next": ["领取_点击补货"]
+  },
+  "领取_点击补货": {
+    "recognition": "OCR",
+    "expected": "补货",
+    "threshold": 0.8,
+    "save_result": true,
+    "action": "Click",
+    "next": ["领取_点击送货上门"]
+  },
+  "领取_点击送货上门": {
+    "recognition": "OCR",
+    "expected": "送货上门",
+    "threshold": 0.8,
+    "save_result": true,
+    "action": "Click",
+    "next": ["领取_送货上门确定"]
+  },
+  "领取_送货上门确定": {
+    "recognition": "TemplateMatch",
+    "template": "送货上门确认.png",
+    "threshold": 0.9,
+    "action": "Click"
+  }
+}

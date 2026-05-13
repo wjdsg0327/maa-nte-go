@@ -1,11 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"unsafe"
 
 	"github.com/MaaXYZ/maa-framework-go/v4"
@@ -105,11 +106,17 @@ func main() {
 	resPath, _ := filepath.Abs("./resource")
 	fmt.Printf("加载资源路径: %s\n", resPath)
 
-	// 使用 PostPipeline 只加载 pipeline 目录
+	// 使用 PostPipeline 加载 pipeline 目录
 	pipelinePath := filepath.Join(resPath, "pipeline")
-	job := res.PostPipeline(pipelinePath)
-	status := job.Wait()
-	fmt.Printf("资源加载状态: %v\n", status)
+	res.PostPipeline(pipelinePath).Wait()
+
+	// 加载图片目录
+	imagePath := filepath.Join(resPath, "image")
+	res.PostImage(imagePath).Wait()
+
+	// 加载 OCR 模型
+	ocrPath := filepath.Join(resPath, "ocr")
+	res.PostOcrModel(ocrPath).Wait()
 
 	if !res.Loaded() {
 		log.Fatal("资源加载失败")
@@ -120,7 +127,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("获取节点列表失败: %v", err)
 	}
-	fmt.Printf("已加载节点: %v\n", nodes)
+	fmt.Printf("已加载任务: %v\n", nodes)
 
 	if err := tasker.BindResource(res); err != nil {
 		log.Fatalf("绑定资源失败: %v", err)
@@ -130,20 +137,77 @@ func main() {
 		log.Fatal("任务器初始化失败")
 	}
 
-	// 直接测试按键 - ESC = 27
-	fmt.Println("\n发送 ESC 键 (KeyDown + KeyUp)...")
-	ctrl.PostKeyDown(27).Wait()
-	fmt.Println("KeyDown 完成")
-	time.Sleep(100 * time.Millisecond)
-	ctrl.PostKeyUp(27).Wait()
-	fmt.Println("KeyUp 完成")
+	// 7. 选择并执行任务
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Println("\n=== 可用任务 ===")
+		for i, node := range nodes {
+			fmt.Printf("%d. %s\n", i+1, node)
+		}
+		fmt.Println("0. 退出")
+		fmt.Print("\n请选择任务编号: ")
 
-	return
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
 
-	// 7. 执行 Startup 任务
-	fmt.Println("\n开始执行 Startup 任务...")
-	taskJob := tasker.PostTask("Startup")
-	taskStatus := taskJob.Wait()
-	fmt.Printf("任务执行状态: %v\n", taskStatus)
-	fmt.Println("任务完成")
+		if input == "0" {
+			fmt.Println("退出程序")
+			return
+		}
+
+		// 解析选择
+		var choice int
+		fmt.Sscanf(input, "%d", &choice)
+		if choice < 1 || choice > len(nodes) {
+			fmt.Println("无效选择，请重新输入")
+			continue
+		}
+
+		taskName := nodes[choice-1]
+		fmt.Printf("\n开始执行任务: %s\n", taskName)
+		taskJob := tasker.PostTask(taskName)
+		status := taskJob.Wait()
+
+		// 获取最新节点详情
+		nodeDetail, err := tasker.GetLatestNode(taskName)
+
+		if err != nil {
+			log.Fatalf("获取节点详情失败: %v", err)
+		}
+
+		//ocr处理
+		if nodeDetail.Recognition != nil && nodeDetail.Recognition.Results != nil {
+			// 所有识别结果
+			for i, result := range nodeDetail.Recognition.Results.All {
+				if ocrResult, ok := result.AsOCR(); ok {
+					fmt.Printf("结果%d: 文本=%s, 置信度=%.2f, 位置=%v\n",
+						i, ocrResult.Text, ocrResult.Score, ocrResult.Box)
+				}
+			}
+
+			// 最佳结果
+			if nodeDetail.Recognition.Results.Best != nil {
+				if ocrResult, ok := nodeDetail.Recognition.Results.Best.AsOCR(); ok {
+					fmt.Printf("最佳结果: 文本=%s, 置信度=%.2f\n", ocrResult.Text, ocrResult.Score)
+				}
+			}
+
+			// 所有匹配结果
+			for i, result := range nodeDetail.Recognition.Results.All {
+				if tmResult, ok := result.AsTemplateMatch(); ok {
+					fmt.Printf("结果%d: 置信度=%.2f, 位置=%v\n",
+						i, tmResult.Score, tmResult.Box)
+				}
+			}
+			// 最佳结果
+			if nodeDetail.Recognition.Results.Best != nil {
+				if tmResult, ok := nodeDetail.Recognition.Results.Best.AsTemplateMatch(); ok {
+					fmt.Printf("最佳匹配: 置信度=%.2f, 位置=%v\n", tmResult.Score, tmResult.Box)
+				}
+			}
+
+		}
+
+		fmt.Printf("任务执行完成，状态: %v\n", status)
+	}
 }

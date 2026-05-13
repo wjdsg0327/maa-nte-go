@@ -1,12 +1,6 @@
 {
   "Startup": {
     "recognition": "DirectHit",
-    "action": "Click",
-    "target": [100, 100],
-    "next": ["PressEsc"]
-  },
-  "PressEsc": {
-    "recognition": "DirectHit",
     "action": "ClickKey",
     "key": 27
   }
