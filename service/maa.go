@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -13,13 +15,14 @@ import (
 )
 
 type MaaService struct {
-	mu        sync.Mutex
-	tasker    *maa.Tasker
+	mu         sync.Mutex
+	tasker     *maa.Tasker
 	controller *maa.Controller
-	resource  *maa.Resource
-	inited    bool
-	running   bool
-	lastTask  string
+	resource   *maa.Resource
+	inited     bool
+	running    bool
+	lastTask   string
+	lastError  string
 }
 
 var Service = &MaaService{}
@@ -38,13 +41,24 @@ func (s *MaaService) Init() error {
 		return fmt.Errorf("解析库目录失败: %v", err)
 	}
 
+	// 设置日志目录，带标记的识别图片会保存到 log/vision 目录
+	logDir, _ := filepath.Abs("./log")
+	// 确保日志目录存在
+	os.MkdirAll(logDir, 0755)
+	os.MkdirAll(filepath.Join(logDir, "vision"), 0755)
+
 	if err := maa.Init(
 		maa.WithLibDir(libDir),
+		maa.WithLogDir(logDir),
+		maa.WithSaveDraw(true), // 启用保存带标记的识别结果图片
 		maa.WithStdoutLevel(maa.LoggingLevelInfo),
 		maa.WithDebugMode(true),
 	); err != nil {
 		return fmt.Errorf("maa 初始化失败: %v", err)
 	}
+
+	visionDir := filepath.Join(logDir, "vision")
+	log.Printf("识别结果图片将保存到: %s", visionDir)
 
 	userDir, _ := filepath.Abs(".")
 	if err := maa.ConfigInitOption(userDir, "{}"); err != nil {
@@ -56,11 +70,11 @@ func (s *MaaService) Init() error {
 	if err != nil {
 		return fmt.Errorf("创建资源失败: %v", err)
 	}
-
-	resPath, _ := filepath.Abs("./resource")
-	s.resource.PostPipeline(filepath.Join(resPath, "pipeline")).Wait()
-	s.resource.PostImage(filepath.Join(resPath, "image")).Wait()
-	s.resource.PostOcrModel(filepath.Join(resPath, "ocr")).Wait()
+	if err := s.loadResourcesLocked(); err != nil {
+		s.resource.Destroy()
+		s.resource = nil
+		return err
+	}
 
 	// 创建 Tasker
 	s.tasker, err = maa.NewTasker()
@@ -68,11 +82,55 @@ func (s *MaaService) Init() error {
 		return fmt.Errorf("创建 Tasker 失败: %v", err)
 	}
 
-	s.tasker.BindResource(s.resource)
+	if err := s.tasker.BindResource(s.resource); err != nil {
+		s.tasker.Destroy()
+		s.tasker = nil
+		s.resource.Destroy()
+		s.resource = nil
+		return fmt.Errorf("绑定资源失败: %v", err)
+	}
 
 	s.inited = true
 	log.Println("MaaFramework 初始化成功")
+
+	// 自动连接目标窗口
+	go s.autoConnectTargetWindow("异环")
+
 	return nil
+}
+
+// autoConnectTargetWindow 自动连接指定名称的窗口
+func (s *MaaService) autoConnectTargetWindow(windowTitle string) {
+	// 等待一下让初始化完全完成
+	// time.Sleep(time.Second)
+
+	s.mu.Lock()
+	if !s.inited {
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Unlock()
+
+	windows, err := maa.FindDesktopWindows()
+	if err != nil {
+		log.Printf("获取窗口列表失败: %v", err)
+		return
+	}
+
+	for _, w := range windows {
+		// 去除空格后匹配
+		if strings.TrimSpace(w.WindowName) == windowTitle {
+			log.Printf("找到目标窗口: %s (句柄: %v)", w.WindowName, w.Handle)
+			if err := s.ConnectWindow(uintptr(w.Handle)); err != nil {
+				log.Printf("自动连接窗口失败: %v", err)
+			} else {
+				log.Printf("已自动连接到窗口: %s", w.WindowName)
+			}
+			return
+		}
+	}
+
+	log.Printf("未找到名为 '%s' 的窗口", windowTitle)
 }
 
 // ConnectWindow 连接到指定窗口
@@ -100,8 +158,21 @@ func (s *MaaService) ConnectWindow(hWnd uintptr) error {
 		return fmt.Errorf("创建控制器失败: %v", err)
 	}
 
-	s.controller.PostConnect().Wait()
-	s.tasker.BindController(s.controller)
+	if err := waitMaaJob("连接窗口", s.controller.PostConnect()); err != nil {
+		s.controller.Destroy()
+		s.controller = nil
+		return err
+	}
+	if !s.controller.Connected() {
+		s.controller.Destroy()
+		s.controller = nil
+		return errors.New("控制器连接失败")
+	}
+	if err := s.tasker.BindController(s.controller); err != nil {
+		s.controller.Destroy()
+		s.controller = nil
+		return fmt.Errorf("绑定控制器失败: %v", err)
+	}
 
 	if !s.tasker.Initialized() {
 		return errors.New("任务器初始化失败")
@@ -158,85 +229,207 @@ func (s *MaaService) ReloadResources() error {
 		return errors.New("MaaFramework 未初始化")
 	}
 
-	resPath, _ := filepath.Abs("./resource")
-	s.resource.Clear()
-	s.resource.PostPipeline(filepath.Join(resPath, "pipeline")).Wait()
-	s.resource.PostImage(filepath.Join(resPath, "image")).Wait()
-	s.resource.PostOcrModel(filepath.Join(resPath, "ocr")).Wait()
+	if err := s.resource.Clear(); err != nil {
+		return fmt.Errorf("清理资源失败: %v", err)
+	}
+	if err := s.loadResourcesLocked(); err != nil {
+		return err
+	}
 
 	log.Println("资源已重新加载")
 	return nil
 }
 
-// ExecuteTask 执行任务
-func (s *MaaService) ExecuteTask(taskName string) (map[string]interface{}, error) {
-	s.mu.Lock()
-	if !s.inited || s.tasker == nil {
-		s.mu.Unlock()
-		return nil, errors.New("MaaFramework 未初始化")
+func (s *MaaService) loadResourcesLocked() error {
+	resPath, err := filepath.Abs("./resource")
+	if err != nil {
+		return fmt.Errorf("解析资源目录失败: %v", err)
 	}
-	if s.controller == nil || !s.controller.Connected() {
-		s.mu.Unlock()
-		return nil, errors.New("请先连接窗口")
+	if _, err := os.Stat(resPath); err != nil {
+		return fmt.Errorf("资源目录不可用: %v", err)
 	}
-	if s.running {
-		s.mu.Unlock()
-		return nil, errors.New("任务正在执行中")
-	}
-	s.running = true
-	s.lastTask = taskName
-	s.mu.Unlock()
 
+	// Prefer the official bundle loading path so default_pipeline.json and the
+	// standard resource layout are handled consistently by MaaFramework.
+	if err := waitMaaJob("加载资源包", s.resource.PostBundle(resPath)); err != nil {
+		return err
+	}
+
+	// Keep compatibility with the current project layout, where OCR models live
+	// in resource/ocr instead of the documented resource/model/ocr directory.
+	ocrPath := filepath.Join(resPath, "ocr")
+	if info, err := os.Stat(ocrPath); err == nil && info.IsDir() {
+		if err := waitMaaJob("加载 OCR 模型", s.resource.PostOcrModel(ocrPath)); err != nil {
+			return err
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("检查 OCR 模型目录失败: %v", err)
+	}
+
+	if !s.resource.Loaded() {
+		return errors.New("资源加载未完成或失败")
+	}
+	return nil
+}
+
+func waitMaaJob(name string, job *maa.Job) error {
+	if job == nil {
+		return fmt.Errorf("%s失败: Maa job 为空", name)
+	}
+	status := job.Wait().Status()
+	if !status.Success() {
+		return fmt.Errorf("%s失败: %s", name, status)
+	}
+	return nil
+}
+
+// ExecuteTask 执行任务
+func (s *MaaService) ExecuteTask(taskName string, nodeName string) (result map[string]interface{}, err error) {
+	if err := s.reserveTask(taskName); err != nil {
+		return nil, err
+	}
 	defer func() {
-		s.mu.Lock()
-		s.running = false
-		s.mu.Unlock()
+		s.finishTask(err)
 	}()
 
-	log.Printf("开始执行任务: %s", taskName)
-	taskJob := s.tasker.PostTask(taskName)
-	status := taskJob.Wait()
+	return s.executeReservedTask(taskName, nodeName)
+}
+
+func (s *MaaService) StartTask(taskName string, nodeName string) error {
+	if err := s.reserveTask(taskName); err != nil {
+		return err
+	}
+
+	go func() {
+		_, err := s.executeReservedTask(taskName, nodeName)
+		if err != nil {
+			log.Printf("任务执行失败: %v", err)
+		}
+		s.finishTask(err)
+	}()
+
+	return nil
+}
+
+func (s *MaaService) reserveTask(taskName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.inited || s.tasker == nil {
+		return errors.New("MaaFramework 未初始化")
+	}
+	if s.controller == nil || !s.controller.Connected() {
+		return errors.New("请先连接窗口")
+	}
+	if s.running {
+		return errors.New("任务正在执行中")
+	}
+
+	s.running = true
+	s.lastTask = taskName
+	s.lastError = ""
+	return nil
+}
+
+func (s *MaaService) finishTask(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.running = false
+	if err != nil {
+		s.lastError = err.Error()
+	}
+}
+
+func (s *MaaService) executeReservedTask(taskName string, nodeName string) (map[string]interface{}, error) {
+	// 如果指定了节点名，使用节点名作为入口执行
+	entryTask := taskName
+	if nodeName != "" {
+		entryTask = nodeName
+		log.Printf("开始执行节点: %s (pipeline: %s)", nodeName, taskName)
+	} else {
+		log.Printf("开始执行任务: %s", taskName)
+	}
+
+	taskJob := s.tasker.PostTask(entryTask)
+	taskJob.Wait()
+	if err := taskJob.Error(); err != nil {
+		return nil, err
+	}
+	status := taskJob.Status()
 
 	// 获取结果
 	result := map[string]interface{}{
 		"task":   taskName,
-		"status": fmt.Sprintf("%v", status),
+		"status": status.String(),
 	}
 
-	// 获取节点详情
-	nodeDetail, err := s.tasker.GetLatestNode(taskName)
-	if err == nil && nodeDetail != nil {
-		nodeInfo := map[string]interface{}{
-			"name":    nodeDetail.Name,
-			"success": nodeDetail.RunCompleted,
-		}
-
-		// 识别结果
-		if nodeDetail.Recognition != nil && nodeDetail.Recognition.Results != nil {
-			var allResults []map[string]interface{}
-			for _, r := range nodeDetail.Recognition.Results.All {
-				if ocr, ok := r.AsOCR(); ok {
-					allResults = append(allResults, map[string]interface{}{
-						"type":  "OCR",
-						"text":  ocr.Text,
-						"score": ocr.Score,
-						"box":   ocr.Box,
-					})
-				} else if tm, ok := r.AsTemplateMatch(); ok {
-					allResults = append(allResults, map[string]interface{}{
-						"type":  "TemplateMatch",
-						"score": tm.Score,
-						"box":   tm.Box,
-					})
-				}
+	// 获取节点详情 - 注意：GetLatestNode 对中文节点名可能有编码问题
+	// 使用 TaskJob.GetDetail() 获取任务详情，再获取节点信息
+	taskDetail, err := taskJob.GetDetail()
+	if err == nil && taskDetail != nil && len(taskDetail.Nodes) > 0 {
+		// 获取最后一个节点的详情
+		lastNodeRef := taskDetail.Nodes[len(taskDetail.Nodes)-1]
+		nodeDetail, err := lastNodeRef.GetDetail()
+		if err == nil && nodeDetail != nil {
+			nodeInfo := map[string]interface{}{
+				"name":    nodeDetail.Name,
+				"success": nodeDetail.RunCompleted,
 			}
-			nodeInfo["results"] = allResults
-		}
 
-		result["node"] = nodeInfo
+			// 识别结果
+			if nodeDetail.Recognition != nil && nodeDetail.Recognition.Results != nil {
+				log.Printf("[%s] 识别算法: %s, 结果数量: %d", nodeDetail.Name, nodeDetail.Recognition.Algorithm, len(nodeDetail.Recognition.Results.All))
+
+				var allResults []map[string]interface{}
+				for i, r := range nodeDetail.Recognition.Results.All {
+					if ocr, ok := r.AsOCR(); ok {
+						allResults = append(allResults, map[string]interface{}{
+							"type":  "OCR",
+							"text":  ocr.Text,
+							"score": ocr.Score,
+							"box":   ocr.Box,
+						})
+						log.Printf("[%s] OCR结果[%d]: text=%s, score=%.4f, box=(%d,%d,%d,%d)",
+							nodeDetail.Name, i, ocr.Text, ocr.Score,
+							ocr.Box.X(), ocr.Box.Y(), ocr.Box.Width(), ocr.Box.Height())
+					} else if tm, ok := r.AsTemplateMatch(); ok {
+						allResults = append(allResults, map[string]interface{}{
+							"type":  "TemplateMatch",
+							"score": tm.Score,
+							"box":   tm.Box,
+						})
+						log.Printf("[%s] 模板匹配结果[%d]: score=%.4f", nodeDetail.Name, i, tm.Score)
+					} else {
+						log.Printf("[%s] 其他识别结果[%d]: type=%s", nodeDetail.Name, i, r.Type())
+					}
+				}
+				nodeInfo["results"] = allResults
+
+				// 使用 OCR 处理模块打印 OCR 结果
+				ocrResults := ExtractOCRResults(nodeDetail.Recognition)
+				if len(ocrResults) > 0 {
+					PrintOCRResults(ocrResults, nodeDetail.Name)
+				} else {
+					log.Printf("[%s] 无 OCR 识别结果", nodeDetail.Name)
+				}
+
+				// 保存带标记的图片
+				if err := SaveDrawImage(nodeDetail.Recognition, nodeDetail.Name); err != nil {
+					log.Printf("[%s] 保存标记图片失败: %v", nodeDetail.Name, err)
+				}
+			} else {
+				log.Printf("[%s] 无识别结果或识别结果为空", nodeDetail.Name)
+			}
+
+			result["node"] = nodeInfo
+		}
+	} else {
+		log.Printf("获取节点详情失败 (可能是因为中文节点名编码问题): %v", err)
 	}
 
-	log.Printf("任务完成: %s, 状态: %v", taskName, status)
+	log.Printf("任务完成: %s, 状态: %v", entryTask, status)
+
 	return result, nil
 }
 
@@ -271,6 +464,7 @@ func (s *MaaService) GetStatus() map[string]interface{} {
 		"connected": s.controller != nil && s.controller.Connected(),
 		"running":   s.running,
 		"lastTask":  s.lastTask,
+		"lastError": s.lastError,
 	}
 }
 

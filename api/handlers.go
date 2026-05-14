@@ -15,6 +15,13 @@ import (
 
 const pipelineDir = "./resource/pipeline"
 
+func validatePipelineName(name string) error {
+	if name == "" || strings.ContainsAny(name, "/\\:*?\"<>|") || name == "." || name == ".." {
+		return http.ErrNotSupported
+	}
+	return nil
+}
+
 // ListPipelines 获取所有 pipeline 列表
 func ListPipelines(c *gin.Context) {
 	files, err := os.ReadDir(pipelineDir)
@@ -40,6 +47,10 @@ func ListPipelines(c *gin.Context) {
 // GetPipeline 获取单个 pipeline 内容
 func GetPipeline(c *gin.Context) {
 	name := c.Param("name")
+	if err := validatePipelineName(name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file name"})
+		return
+	}
 	filePath := filepath.Join(pipelineDir, name+".json")
 
 	data, err := os.ReadFile(filePath)
@@ -77,7 +88,7 @@ func CreatePipeline(c *gin.Context) {
 	}
 
 	// 文件名安全检查
-	if strings.ContainsAny(req.Name, "/\\:*?\"<>|") {
+	if err := validatePipelineName(req.Name); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file name"})
 		return
 	}
@@ -102,7 +113,10 @@ func CreatePipeline(c *gin.Context) {
 	}
 
 	// 重新加载资源
-	service.Service.ReloadResources()
+	if err := service.Service.ReloadResources(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Pipeline created but resource reload failed: " + err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Pipeline created", "name": req.Name})
 }
@@ -110,6 +124,10 @@ func CreatePipeline(c *gin.Context) {
 // UpdatePipeline 更新 pipeline
 func UpdatePipeline(c *gin.Context) {
 	name := c.Param("name")
+	if err := validatePipelineName(name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file name"})
+		return
+	}
 	filePath := filepath.Join(pipelineDir, name+".json")
 
 	// 检查是否存在
@@ -139,7 +157,10 @@ func UpdatePipeline(c *gin.Context) {
 	}
 
 	// 重新加载资源
-	service.Service.ReloadResources()
+	if err := service.Service.ReloadResources(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Pipeline updated but resource reload failed: " + err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Pipeline updated", "name": name})
 }
@@ -147,6 +168,10 @@ func UpdatePipeline(c *gin.Context) {
 // DeletePipeline 删除 pipeline
 func DeletePipeline(c *gin.Context) {
 	name := c.Param("name")
+	if err := validatePipelineName(name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file name"})
+		return
+	}
 	filePath := filepath.Join(pipelineDir, name+".json")
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -160,7 +185,10 @@ func DeletePipeline(c *gin.Context) {
 	}
 
 	// 重新加载资源
-	service.Service.ReloadResources()
+	if err := service.Service.ReloadResources(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Pipeline deleted but resource reload failed: " + err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Pipeline deleted", "name": name})
 }
@@ -169,24 +197,23 @@ func DeletePipeline(c *gin.Context) {
 func ExecuteTask(c *gin.Context) {
 	var req struct {
 		TaskName string `json:"task" binding:"required"`
+		NodeName string `json:"node"` // 可选：指定从哪个节点开始执行
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := service.Service.StartTask(req.TaskName, req.NodeName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	// 异步执行
-	go func() {
-		result, err := service.Service.ExecuteTask(req.TaskName)
-		if err != nil {
-			// 可以通过 WebSocket 发送错误通知
-			return
-		}
-		_ = result
-	}()
-
-	c.JSON(http.StatusAccepted, gin.H{"message": "Task started", "task": req.TaskName})
+	if req.NodeName != "" {
+		c.JSON(http.StatusAccepted, gin.H{"message": "Task started", "task": req.TaskName, "node": req.NodeName})
+	} else {
+		c.JSON(http.StatusAccepted, gin.H{"message": "Task started", "task": req.TaskName})
+	}
 }
 
 // GetTaskStatus 获取任务状态

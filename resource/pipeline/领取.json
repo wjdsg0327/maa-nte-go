@@ -10,11 +10,11 @@
   "领取_72小时": {
     "action": "Click",
     "expected": "72小时",
-    "model": "det.onnx",
     "next": [
       "领取_点击补货"
     ],
     "recognition": "OCR",
+    "save_draw": true,
     "save_result": true,
     "threshold": 0.5
   },
@@ -24,7 +24,10 @@
       "领取_提取收益"
     ],
     "recognition": "TemplateMatch",
-    "template": "咖舍.png"
+    "template": [
+      "咖舍.png",
+      "咖舍2.png"
+    ]
   },
   "领取_提取收益": {
     "action": "Click",
@@ -86,13 +89,22 @@
       "领取_72小时"
     ],
     "recognition": "TemplateMatch",
+    "save_draw": true,
     "template": "补货.png"
   },
   "领取_送货上门确定": {
     "action": "Click",
-    "expected": "确定",
+    "expected": "确认",
     "recognition": "OCR",
+    "roi": [
+      983,
+      260,
+      169,
+      388
+    ],
+    "save_draw": true,
     "save_result": true,
-    "threshold": 0.8
+    "template": "送货上门确认.png",
+    "threshold": 0.5
   }
 }
