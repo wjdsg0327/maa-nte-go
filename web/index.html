@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>maa-nte-go</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { background: #2196F3; color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 1.5rem; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .card h2 { margin-bottom: 15px; color: #333; font-size: 1.2rem; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+        .btn-primary { background: #2196F3; color: white; }
+        .btn-primary:hover { background: #1976D2; }
+        .btn-success { background: #4CAF50; color: white; }
+        .btn-success:hover { background: #388E3C; }
+        .btn-danger { background: #f44336; color: white; }
+        .btn-danger:hover { background: #d32f2f; }
+        .btn-secondary { background: #757575; color: white; }
+        .btn-secondary:hover { background: #616161; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .pipeline-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+        .pipeline-item { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 15px; cursor: pointer; transition: all 0.2s; }
+        .pipeline-item:hover { border-color: #2196F3; box-shadow: 0 2px 8px rgba(33,150,243,0.2); }
+        .pipeline-item.selected { border-color: #2196F3; background: #e3f2fd; }
+        .pipeline-item h3 { color: #333; margin-bottom: 10px; }
+        .pipeline-item .actions { display: flex; gap: 8px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: #555; font-size: 14px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #2196F3; }
+        .form-row { display: flex; gap: 15px; }
+        .form-row .form-group { flex: 1; }
+        .window-list { max-height: 200px; overflow-y: auto; }
+        .window-item { padding: 10px; border: 1px solid #eee; border-radius: 4px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .window-item:hover { background: #f5f5f5; }
+        .window-item.connected { border-color: #4CAF50; background: #e8f5e9; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .status-badge.connected { background: #e8f5e9; color: #2e7d32; }
+        .status-badge.disconnected { background: #ffebee; color: #c62828; }
+        .status-badge.running { background: #fff3e0; color: #ef6c00; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal { background: white; border-radius: 8px; padding: 20px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
+        .modal.large { max-width: 900px; }
+        .modal h2 { margin-bottom: 15px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        .flex { display: flex; }
+        .gap-10 { gap: 10px; }
+        .mb-10 { margin-bottom: 10px; }
+        .mb-20 { margin-bottom: 20px; }
+        .text-muted { color: #888; font-size: 14px; }
+        pre { background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 13px; }
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; color: white; z-index: 2000; animation: slideIn 0.3s ease; }
+        .toast.success { background: #4CAF50; }
+        .toast.error { background: #f44336; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Node Editor Styles */
+        .node-editor { max-height: 60vh; overflow-y: auto; }
+        .node-card { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+        .node-card.active { border-color: #2196F3; background: #e3f2fd; }
+        .node-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .node-header h3 { font-size: 16px; color: #333; }
+        .node-header input { font-size: 16px; font-weight: bold; border: none; background: transparent; padding: 4px; }
+        .node-header input:focus { outline: none; border-bottom: 2px solid #2196F3; }
+        .node-body { padding: 10px 0; }
+        .field-group { margin-bottom: 12px; }
+        .field-group label { display: inline-block; min-width: 100px; font-weight: 500; color: #555; font-size: 13px; }
+        .field-group .field-input { display: inline-block; width: calc(100% - 110px); }
+        .field-group select, .field-group input { padding: 6px 10px; font-size: 13px; }
+        .field-hint { font-size: 11px; color: #888; margin-top: 3px; }
+        .next-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+        .next-tag { background: #e3f2fd; color: #1976D2; padding: 4px 8px; border-radius: 4px; font-size: 12px; display: flex; align-items: center; gap: 5px; }
+        .next-tag .remove { cursor: pointer; color: #f44336; }
+        .add-next-input { display: flex; gap: 5px; margin-top: 8px; }
+        .add-next-input input { flex: 1; }
+        .add-next-input button { padding: 6px 12px; }
+
+        /* Pipeline Nodes List */
+        .nodes-sidebar { border-right: 1px solid #eee; padding-right: 15px; }
+        .nodes-list { max-height: 50vh; overflow-y: auto; }
+        .node-list-item { padding: 10px; border: 1px solid #eee; border-radius: 4px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+        .node-list-item:hover { background: #f5f5f5; }
+        .node-list-item.active { border-color: #2196F3; background: #e3f2fd; }
+        .node-list-item .node-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .node-list-item .node-index { color: #888; font-size: 12px; min-width: 20px; }
+        .node-list-item .node-name { font-weight: 500; flex: 1; }
+        .node-list-item .node-type { font-size: 11px; color: #888; padding-left: 28px; }
+
+        /* Grid layout for editor */
+        .editor-grid { display: grid; grid-template-columns: 250px 1fr; gap: 20px; }
+        @media (max-width: 768px) { .editor-grid { grid-template-columns: 1fr; } }
+
+        /* Checkbox style */
+        .checkbox-group { display: flex; align-items: center; gap: 8px; }
+        .checkbox-group input[type="checkbox"] { width: auto; }
+
+        /* Help text */
+        .help-text { background: #fff3e0; border-left: 3px solid #ff9800; padding: 10px; margin-bottom: 15px; font-size: 13px; color: #666; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1>maa-nte-go</h1>
+        <div class="flex gap-10">
+            <span class="status-badge" :class="status.connected ? 'connected' : 'disconnected'">
+                {{ status.connected ? '已连接' : '未连接' }}
+            </span>
+            <span class="status-badge" v-if="status.running" class="running">执行中...</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 窗口选择 -->
+        <div class="card">
+            <h2>窗口连接</h2>
+            <div class="flex gap-10 mb-20">
+                <button class="btn btn-primary" @click="refreshWindows">刷新窗口列表</button>
+            </div>
+            <div class="window-list">
+                <div v-for="w in windows" :key="w.handle"
+                     class="window-item"
+                     :class="{ connected: connectedHandle === w.handle }"
+                     @click="connectWindow(w)">
+                    <div>
+                        <strong>{{ w.title }}</strong>
+                        <div class="text-muted">{{ w.class }}</div>
+                    </div>
+                    <button class="btn btn-success btn-sm" v-if="connectedHandle === w.handle">已连接</button>
+                    <button class="btn btn-primary btn-sm" v-else>连接</button>
+                </div>
+                <div v-if="windows.length === 0" class="text-muted">点击"刷新窗口列表"获取可用窗口</div>
+            </div>
+        </div>
+
+        <!-- Pipeline 管理 -->
+        <div class="card">
+            <h2>Pipeline 管理</h2>
+            <div class="flex gap-10 mb-20">
+                <button class="btn btn-primary" @click="showCreateModal = true">新建 Pipeline</button>
+                <button class="btn btn-secondary" @click="refreshPipelines">刷新列表</button>
+            </div>
+            <div class="pipeline-list">
+                <div v-for="p in pipelines" :key="p.name"
+                     class="pipeline-item"
+                     :class="{ selected: selectedPipeline === p.name }"
+                     @click="selectPipeline(p.name)">
+                    <h3>{{ p.name }}</h3>
+                    <div class="actions">
+                        <button class="btn btn-success" @click.stop="executeTask(p.name)">执行</button>
+                        <button class="btn btn-primary" @click.stop="editPipeline(p.name)">编辑</button>
+                        <button class="btn btn-danger" @click.stop="deletePipeline(p.name)">删除</button>
+                    </div>
+                </div>
+                <div v-if="pipelines.length === 0" class="text-muted">暂无 Pipeline</div>
+            </div>
+        </div>
+
+        <!-- 任务执行结果 -->
+        <div class="card" v-if="lastResult">
+            <h2>执行结果</h2>
+            <pre>{{ JSON.stringify(lastResult, null, 2) }}</pre>
+        </div>
+    </div>
+
+    <!-- 新建 Pipeline Modal -->
+    <div class="modal-overlay" v-if="showCreateModal" @click.self="closeModals">
+        <div class="modal">
+            <h2>新建 Pipeline</h2>
+            <div class="form-group">
+                <label>Pipeline 名称</label>
+                <input v-model="newName" placeholder="输入名称">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @click="closeModals">取消</button>
+                <button class="btn btn-primary" @click="createPipeline">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 可视化编辑器 Modal -->
+    <div class="modal-overlay" v-if="showEditModal" @click.self="closeModals">
+        <div class="modal large">
+            <h2>编辑 Pipeline - {{ editingName }}</h2>
+            <div class="help-text">
+                点击左侧节点列表编辑节点，或添加新节点。每个节点包含识别方式、动作和跳转目标。
+            </div>
+            <div class="editor-grid">
+                <!-- 左侧：节点列表 -->
+                <div class="nodes-sidebar">
+                    <div class="flex gap-10 mb-10">
+                        <button class="btn btn-primary btn-sm" @click="addNode">+ 添加节点</button>
+                    </div>
+                    <div class="nodes-list">
+                        <div v-for="(name, idx) in nodeNames" :key="name"
+                             class="node-list-item"
+                             :class="{ active: activeNodeName === name }"
+                             @click="selectNode(name)">
+                            <div class="node-header">
+                                <span class="node-index">{{ idx + 1 }}.</span>
+                                <span class="node-name">{{ name }}</span>
+                                <button class="btn btn-success btn-sm" @click.stop="executeNode(name)" title="执行此节点">▶</button>
+                            </div>
+                            <div class="node-type">{{ editNodes[name]?.recognition || 'DirectHit' }} → {{ editNodes[name]?.action || 'DoNothing' }}</div>
+                        </div>
+                        <div v-if="nodeNames.length === 0" class="text-muted">暂无节点</div>
+                    </div>
+                </div>
+
+                <!-- 右侧：节点编辑表单 -->
+                <div class="node-editor">
+                    <div v-if="activeNode">
+                        <div class="node-card active">
+                            <div class="node-header">
+                                <input v-model="activeNodeName" @change="renameNode" placeholder="节点名称">
+                                <button class="btn btn-danger btn-sm" @click="deleteActiveNode">删除节点</button>
+                            </div>
+                            <div class="node-body">
+                                <!-- 识别方式 -->
+                                <div class="field-group">
+                                    <label>识别方式</label>
+                                    <select v-model="activeNode.recognition" class="field-input">
+                                        <option value="DirectHit">DirectHit - 直接命中</option>
+                                        <option value="TemplateMatch">TemplateMatch - 模板匹配</option>
+                                        <option value="FeatureMatch">FeatureMatch - 特征匹配</option>
+                                        <option value="ColorMatch">ColorMatch - 颜色匹配</option>
+                                        <option value="OCR">OCR - 文字识别</option>
+                                        <option value="NeuralNetworkClassify">NeuralNetworkClassify - NN分类</option>
+                                        <option value="NeuralNetworkDetect">NeuralNetworkDetect - NN检测</option>
+                                        <option value="And">And - 组合(与)</option>
+                                        <option value="Or">Or - 组合(或)</option>
+                                        <option value="Custom">Custom - 自定义</option>
+                                    </select>
+                                </div>
+
+                                <!-- 通用识别字段 (ROI) -->
+                                <template v-if="['DirectHit','TemplateMatch','FeatureMatch','ColorMatch','OCR','NeuralNetworkClassify','NeuralNetworkDetect','Custom'].includes(activeNode.recognition)">
+                                    <div class="field-group">
+                                        <label>ROI区域</label>
+                                        <input v-model="roiInput" placeholder="[x,y,w,h] 或节点名 或 [Anchor]锚点名">
+                                        <div class="field-hint">识别区域 [x,y,w,h]，支持负数，0表示延伸到边缘</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>ROI偏移</label>
+                                        <input v-model="roiOffsetInput" placeholder="[x,y,w,h] 可选">
+                                    </div>
+                                </template>
+
+                                <!-- TemplateMatch 字段 -->
+                                <template v-if="activeNode.recognition === 'TemplateMatch'">
+                                    <div class="field-group">
+                                        <label>模板图片</label>
+                                        <select v-model="activeNode.template" class="field-input">
+                                            <option value="">选择图片...</option>
+                                            <option v-for="img in images" :key="img" :value="img">{{ img }}</option>
+                                        </select>
+                                        <div class="field-hint">从资源目录选择图片，或手动输入路径</div>
+                                        <input v-model="activeNode.template" placeholder="或输入自定义路径 image/button.png" style="margin-top: 5px;">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>阈值</label>
+                                        <input type="number" v-model.number="activeNode.threshold" step="0.01" min="0" max="1" placeholder="0.7">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>排序方式</label>
+                                        <select v-model="activeNode.order_by" class="field-input">
+                                            <option value="">默认(Horizontal)</option>
+                                            <option value="Horizontal">Horizontal - 水平</option>
+                                            <option value="Vertical">Vertical - 垂直</option>
+                                            <option value="Score">Score - 分数</option>
+                                            <option value="Random">Random - 随机</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>结果索引</label>
+                                        <input type="number" v-model.number="activeNode.index" placeholder="0 (第几个结果)">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>匹配算法</label>
+                                        <select v-model="activeNode.method" class="field-input">
+                                            <option value="">默认(5)</option>
+                                            <option value="5">5 - TM_CCOEFF_NORMED (推荐)</option>
+                                            <option value="3">3 - TM_CCORR_NORMED</option>
+                                            <option value="10001">10001 - TM_SQDIFF_NORMED(反转)</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group">
+                                        <div class="checkbox-group">
+                                            <input type="checkbox" v-model="activeNode.green_mask" id="greenMask">
+                                            <label for="greenMask" style="margin-bottom: 0;">绿色掩码</label>
+                                        </div>
+                                        <div class="field-hint">图片中RGB(0,255,0)绿色区域不参与匹配</div>
+                                    </div>
+                                </template>
+
+                                <!-- FeatureMatch 字段 -->
+                                <template v-if="activeNode.recognition === 'FeatureMatch'">
+                                    <div class="field-group">
+                                        <label>模板图片</label>
+                                        <select v-model="activeNode.template" class="field-input">
+                                            <option value="">选择图片...</option>
+                                            <option v-for="img in images" :key="img" :value="img">{{ img }}</option>
+                                        </select>
+                                        <input v-model="activeNode.template" placeholder="或输入自定义路径 image/icon.png" style="margin-top: 5px;">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>特征点数量</label>
+                                        <input type="number" v-model.number="activeNode.count" min="0" placeholder="4">
+                                        <div class="field-hint">匹配的最低特征点数量要求</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>检测器</label>
+                                        <select v-model="activeNode.detector" class="field-input">
+                                            <option value="">默认(SIFT)</option>
+                                            <option value="SIFT">SIFT - 精度最高(推荐)</option>
+                                            <option value="KAZE">KAZE - 边缘保持好</option>
+                                            <option value="AKAZE">AKAZE - 速度平衡</option>
+                                            <option value="BRISK">BRISK - 速度快</option>
+                                            <option value="ORB">ORB - 最快(无尺度不变)</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>匹配比例</label>
+                                        <input type="number" v-model.number="activeNode.ratio" step="0.1" min="0" max="1" placeholder="0.6">
+                                        <div class="field-hint">KNN匹配距离比值，越大越宽松</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>排序方式</label>
+                                        <select v-model="activeNode.order_by" class="field-input">
+                                            <option value="">默认(Horizontal)</option>
+                                            <option value="Horizontal">Horizontal</option>
+                                            <option value="Vertical">Vertical</option>
+                                            <option value="Score">Score</option>
+                                            <option value="Area">Area</option>
+                                            <option value="Random">Random</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>结果索引</label>
+                                        <input type="number" v-model.number="activeNode.index" placeholder="0">
+                                    </div>
+                                    <div class="field-group">
+                                        <div class="checkbox-group">
+                                            <input type="checkbox" v-model="activeNode.green_mask" id="greenMaskFM">
+                                            <label for="greenMaskFM" style="margin-bottom: 0;">绿色掩码</label>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- ColorMatch 字段 -->
+                                <template v-if="activeNode.recognition === 'ColorMatch'">
+                                    <div class="field-group">
+                                        <label>颜色匹配方式</label>
+                                        <select v-model="activeNode.method" class="field-input">
+                                            <option value="">默认(4-RGB)</option>
+                                            <option value="4">4 - RGB (3通道)</option>
+                                            <option value="40">40 - HSV (3通道)</option>
+                                            <option value="6">6 - GRAY (1通道)</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>颜色下限</label>
+                                        <input v-model="colorLowerInput" placeholder="[R,G,B] 或 [[R1,G1,B1],...]">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>颜色上限</label>
+                                        <input v-model="colorUpperInput" placeholder="[R,G,B] 或 [[R1,G1,B1],...]">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>像素数量阈值</label>
+                                        <input type="number" v-model.number="activeNode.count" min="1" placeholder="1">
+                                    </div>
+                                    <div class="field-group">
+                                        <div class="checkbox-group">
+                                            <input type="checkbox" v-model="activeNode.connected" id="connected">
+                                            <label for="connected" style="margin-bottom: 0;">仅相连像素</label>
+                                        </div>
+                                        <div class="field-hint">只计数全部相连的最大块</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>排序方式</label>
+                                        <select v-model="activeNode.order_by" class="field-input">
+                                            <option value="">默认(Horizontal)</option>
+                                            <option value="Horizontal">Horizontal</option>
+                                            <option value="Vertical">Vertical</option>
+                                            <option value="Score">Score</option>
+                                            <option value="Area">Area</option>
+                                            <option value="Random">Random</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>结果索引</label>
+                                        <input type="number" v-model.number="activeNode.index" placeholder="0">
+                                    </div>
+                                </template>
+
+                                <!-- OCR 字段 -->
+                                <template v-if="activeNode.recognition === 'OCR'">
+                                    <div class="field-group">
+                                        <label>期望文字</label>
+                                        <input v-model="activeNode.expected" placeholder="确定 或 正则表达式">
+                                        <div class="field-hint">支持正则，多个用数组 ["OK","确定"]</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>置信度阈值</label>
+                                        <input type="number" v-model.number="activeNode.threshold" step="0.01" min="0" max="1" placeholder="0.3">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>文字替换</label>
+                                        <input v-model="replaceInput" placeholder='[["旧1","新1"],["旧2","新2"]]'>
+                                        <div class="field-hint">修正识别不准确的文字</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>排序方式</label>
+                                        <select v-model="activeNode.order_by" class="field-input">
+                                            <option value="">默认(Horizontal)</option>
+                                            <option value="Horizontal">Horizontal</option>
+                                            <option value="Vertical">Vertical</option>
+                                            <option value="Area">Area</option>
+                                            <option value="Length">Length - 文本长度</option>
+                                            <option value="Random">Random</option>
+                                            <option value="Expected">Expected - 按期望顺序</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>结果索引</label>
+                                        <input type="number" v-model.number="activeNode.index" placeholder="0">
+                                    </div>
+                                    <div class="field-group">
+                                        <div class="checkbox-group">
+                                            <input type="checkbox" v-model="activeNode.only_rec" id="onlyRec">
+                                            <label for="onlyRec" style="margin-bottom: 0;">仅识别(不检测)</label>
+                                        </div>
+                                        <div class="field-hint">需要精确设置ROI</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>模型文件夹</label>
+                                        <select v-model="activeNode.model" class="field-input">
+                                            <option value="">选择模型...</option>
+                                            <option v-for="m in ocrModels" :key="m" :value="m">{{ m }}</option>
+                                        </select>
+                                        <div class="field-hint">OCR模型，需要包含 rec.onnx, det.onnx, keys.txt</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>颜色过滤</label>
+                                        <input v-model="activeNode.color_filter" placeholder="ColorMatch节点名">
+                                        <div class="field-hint">先用该节点颜色参数二值化再OCR</div>
+                                    </div>
+                                </template>
+
+                                <!-- NeuralNetworkClassify 字段 -->
+                                <template v-if="activeNode.recognition === 'NeuralNetworkClassify'">
+                                    <div class="field-group">
+                                        <label>模型文件</label>
+                                        <select v-model="activeNode.model" class="field-input">
+                                            <option value="">选择模型...</option>
+                                            <option v-for="m in detectModels" :key="m" :value="m">{{ m }}</option>
+                                        </select>
+                                        <input v-model="activeNode.model" placeholder="或输入自定义路径 model/classify/xxx.onnx" style="margin-top: 5px;">
+                                        <div class="field-hint">ONNX模型文件路径(必选)</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>标签</label>
+                                        <input v-model="labelsInput" placeholder='["Cat","Dog","Mouse"]'>
+                                        <div class="field-hint">分类名称，仅影响日志和调试</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>期望分类</label>
+                                        <input v-model="expectedIndexInput" placeholder="0 或 [0,2]">
+                                        <div class="field-hint">期望命中的分类下标</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>排序方式</label>
+                                        <select v-model="activeNode.order_by" class="field-input">
+                                            <option value="">默认(Horizontal)</option>
+                                            <option value="Horizontal">Horizontal</option>
+                                            <option value="Vertical">Vertical</option>
+                                            <option value="Score">Score</option>
+                                            <option value="Random">Random</option>
+                                            <option value="Expected">Expected</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>结果索引</label>
+                                        <input type="number" v-model.number="activeNode.index" placeholder="0">
+                                    </div>
+                                </template>
+
+                                <!-- NeuralNetworkDetect 字段 -->
+                                <template v-if="activeNode.recognition === 'NeuralNetworkDetect'">
+                                    <div class="field-group">
+                                        <label>模型文件</label>
+                                        <select v-model="activeNode.model" class="field-input">
+                                            <option value="">选择模型...</option>
+                                            <option v-for="m in detectModels" :key="m" :value="m">{{ m }}</option>
+                                        </select>
+                                        <div class="field-hint">YOLOv8/v11 ONNX模型(必选)</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>标签</label>
+                                        <input v-model="labelsInput" placeholder='["Cat","Dog"]'>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>期望分类</label>
+                                        <input v-model="expectedIndexInput" placeholder="0 或 [0,2]">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>置信度阈值</label>
+                                        <input v-model="thresholdInput" placeholder="0.3 或 [0.3,0.5]">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>排序方式</label>
+                                        <select v-model="activeNode.order_by" class="field-input">
+                                            <option value="">默认(Horizontal)</option>
+                                            <option value="Horizontal">Horizontal</option>
+                                            <option value="Vertical">Vertical</option>
+                                            <option value="Score">Score</option>
+                                            <option value="Area">Area</option>
+                                            <option value="Random">Random</option>
+                                            <option value="Expected">Expected</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>结果索引</label>
+                                        <input type="number" v-model.number="activeNode.index" placeholder="0">
+                                    </div>
+                                </template>
+
+                                <!-- And 组合识别 -->
+                                <template v-if="activeNode.recognition === 'And'">
+                                    <div class="field-group">
+                                        <label>子识别列表(与)</label>
+                                        <textarea v-model="allOfInput" class="field-input" rows="4" placeholder='[{"recognition":"TemplateMatch","template":"a.png"},{"recognition":"OCR","expected":"OK"}]'></textarea>
+                                        <div class="field-hint">所有子识别都命中才算成功。支持节点名引用。</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>输出框索引</label>
+                                        <input type="number" v-model.number="activeNode.box_index" min="0" placeholder="0">
+                                        <div class="field-hint">使用第几个子识别的识别框</div>
+                                    </div>
+                                </template>
+
+                                <!-- Or 组合识别 -->
+                                <template v-if="activeNode.recognition === 'Or'">
+                                    <div class="field-group">
+                                        <label>子识别列表(或)</label>
+                                        <textarea v-model="anyOfInput" class="field-input" rows="4" placeholder='[{"recognition":"TemplateMatch","template":"a.png"},"NodeName"]'></textarea>
+                                        <div class="field-hint">命中第一个即成功。支持节点名引用。</div>
+                                    </div>
+                                </template>
+
+                                <!-- Custom 自定义识别 -->
+                                <template v-if="activeNode.recognition === 'Custom'">
+                                    <div class="field-group">
+                                        <label>识别器名称</label>
+                                        <input v-model="activeNode.custom_recognition" placeholder="注册的自定义识别器名">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>识别器参数</label>
+                                        <input v-model="customRecognitionParamInput" placeholder='任意JSON参数'>
+                                    </div>
+                                </template>
+
+                                <hr style="margin: 15px 0; border: none; border-top: 1px solid #eee;">
+
+                                <!-- 动作类型 -->
+                                <div class="field-group">
+                                    <label>动作类型</label>
+                                    <select v-model="activeNode.action" class="field-input">
+                                        <option value="DoNothing">DoNothing - 无操作</option>
+                                        <option value="Click">Click - 点击</option>
+                                        <option value="LongPress">LongPress - 长按</option>
+                                        <option value="Swipe">Swipe - 滑动</option>
+                                        <option value="MultiSwipe">MultiSwipe - 多指滑动</option>
+                                        <option value="Scroll">Scroll - 滚轮</option>
+                                        <option value="ClickKey">ClickKey - 单击按键</option>
+                                        <option value="LongPressKey">LongPressKey - 长按按键</option>
+                                        <option value="KeyDown">KeyDown - 按下按键</option>
+                                        <option value="KeyUp">KeyUp - 释放按键</option>
+                                        <option value="InputText">InputText - 输入文字</option>
+                                        <option value="StartApp">StartApp - 启动应用</option>
+                                        <option value="StopApp">StopApp - 关闭应用</option>
+                                        <option value="StopTask">StopTask - 停止任务</option>
+                                        <option value="Command">Command - 执行命令</option>
+                                        <option value="Shell">Shell - ADB命令</option>
+                                        <option value="Screencap">Screencap - 保存截图</option>
+                                        <option value="TouchDown">TouchDown - 触点按下</option>
+                                        <option value="TouchMove">TouchMove - 触点移动</option>
+                                        <option value="TouchUp">TouchUp - 触点抬起</option>
+                                        <option value="Custom">Custom - 自定义</option>
+                                    </select>
+                                </div>
+
+                                <!-- Click 目标字段 -->
+                                <template v-if="activeNode.action === 'Click'">
+                                    <div class="field-group">
+                                        <label>点击目标</label>
+                                        <input v-model="targetInput" placeholder="true/节点名/[x,y]/[x,y,w,h]">
+                                        <div class="field-hint">true=识别结果, 节点名, [x,y]固定点, [x,y,w,h]区域内随机</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>目标偏移</label>
+                                        <input v-model="targetOffsetInput" placeholder="[x,y,w,h] 可选">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>触点编号</label>
+                                        <input type="number" v-model.number="activeNode.contact" min="0" placeholder="0">
+                                        <div class="field-hint">0=左键/第一指, 1=右键/第二指</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>触点力度</label>
+                                        <input type="number" v-model.number="activeNode.pressure" placeholder="1">
+                                    </div>
+                                </template>
+
+                                <!-- LongPress 长按 -->
+                                <template v-if="activeNode.action === 'LongPress'">
+                                    <div class="field-group">
+                                        <label>长按目标</label>
+                                        <input v-model="targetInput" placeholder="true/节点名/[x,y]/[x,y,w,h]">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>目标偏移</label>
+                                        <input v-model="targetOffsetInput" placeholder="[x,y,w,h] 可选">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>长按时长(ms)</label>
+                                        <input type="number" v-model.number="activeNode.duration" min="0" placeholder="1000">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>触点编号</label>
+                                        <input type="number" v-model.number="activeNode.contact" min="0" placeholder="0">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>触点力度</label>
+                                        <input type="number" v-model.number="activeNode.pressure" placeholder="1">
+                                    </div>
+                                </template>
+
+                                <!-- Swipe 滑动 -->
+                                <template v-if="activeNode.action === 'Swipe'">
+                                    <div class="field-group">
+                                        <label>滑动起点</label>
+                                        <input v-model="swipeBeginInput" placeholder="true/节点名/[x,y]/[x,y,w,h]">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>起点偏移</label>
+                                        <input v-model="swipeBeginOffsetInput" placeholder="[x,y,w,h] 可选">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>滑动终点</label>
+                                        <input v-model="swipeEndInput" placeholder="true/节点名/[x,y]/[x,y,w,h]">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>终点偏移</label>
+                                        <input v-model="swipeEndOffsetInput" placeholder="[x,y,w,h] 可选">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>滑动时长(ms)</label>
+                                        <input type="number" v-model.number="activeNode.duration" min="0" placeholder="200">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>终点停留(ms)</label>
+                                        <input type="number" v-model.number="activeNode.end_hold" min="0" placeholder="0">
+                                    </div>
+                                    <div class="field-group">
+                                        <div class="checkbox-group">
+                                            <input type="checkbox" v-model="activeNode.only_hover" id="onlyHover">
+                                            <label for="onlyHover" style="margin-bottom: 0;">仅悬停移动</label>
+                                        </div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>触点编号</label>
+                                        <input type="number" v-model.number="activeNode.contact" min="0" placeholder="0">
+                                    </div>
+                                </template>
+
+                                <!-- ClickKey/LongPressKey 按键 -->
+                                <template v-if="['ClickKey', 'LongPressKey'].includes(activeNode.action)">
+                                    <div class="field-group">
+                                        <label>按键</label>
+                                        <input v-model="keyInput" placeholder="27 或 [27,13]">
+                                        <div class="field-hint">虚拟按键码，参考文档</div>
+                                    </div>
+                                    <div class="field-group" v-if="activeNode.action === 'LongPressKey'">
+                                        <label>长按时长(ms)</label>
+                                        <input type="number" v-model.number="activeNode.duration" min="0" placeholder="1000">
+                                    </div>
+                                </template>
+
+                                <!-- KeyDown/KeyUp -->
+                                <template v-if="['KeyDown', 'KeyUp'].includes(activeNode.action)">
+                                    <div class="field-group">
+                                        <label>按键</label>
+                                        <input type="number" v-model.number="activeNode.key" placeholder="虚拟按键码">
+                                    </div>
+                                </template>
+
+                                <!-- Scroll 滚轮 -->
+                                <template v-if="activeNode.action === 'Scroll'">
+                                    <div class="field-group">
+                                        <label>滚动目标</label>
+                                        <input v-model="targetInput" placeholder="true/节点名/[x,y]/[x,y,w,h]">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>目标偏移</label>
+                                        <input v-model="targetOffsetInput" placeholder="[x,y,w,h] 可选">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>水平滚动</label>
+                                        <input type="number" v-model.number="activeNode.dx" placeholder="0">
+                                        <div class="field-hint">正值向右，负值向左，建议120的倍数</div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>垂直滚动</label>
+                                        <input type="number" v-model.number="activeNode.dy" placeholder="0">
+                                        <div class="field-hint">正值向上，负值向下，建议120的倍数</div>
+                                    </div>
+                                </template>
+
+                                <!-- TouchDown/TouchMove/TouchUp -->
+                                <template v-if="['TouchDown', 'TouchMove', 'TouchUp'].includes(activeNode.action)">
+                                    <div class="field-group">
+                                        <label>触点编号</label>
+                                        <input type="number" v-model.number="activeNode.contact" min="0" placeholder="0">
+                                    </div>
+                                    <div class="field-group" v-if="activeNode.action !== 'TouchUp'">
+                                        <label>目标位置</label>
+                                        <input v-model="targetInput" placeholder="true/节点名/[x,y]/[x,y,w,h]">
+                                    </div>
+                                    <div class="field-group" v-if="activeNode.action !== 'TouchUp'">
+                                        <label>目标偏移</label>
+                                        <input v-model="targetOffsetInput" placeholder="[x,y,w,h] 可选">
+                                    </div>
+                                    <div class="field-group" v-if="activeNode.action !== 'TouchUp'">
+                                        <label>触控压力</label>
+                                        <input type="number" v-model.number="activeNode.pressure" placeholder="0">
+                                    </div>
+                                </template>
+
+                                <!-- InputText 输入文字 -->
+                                <template v-if="activeNode.action === 'InputText'">
+                                    <div class="field-group">
+                                        <label>输入文字</label>
+                                        <input v-model="activeNode.input_text" placeholder="要输入的文字">
+                                        <div class="field-hint">部分控制器仅支持ASCII</div>
+                                    </div>
+                                </template>
+
+                                <!-- StartApp/StopApp -->
+                                <template v-if="activeNode.action === 'StartApp' || activeNode.action === 'StopApp'">
+                                    <div class="field-group">
+                                        <label>{{ activeNode.action === 'StartApp' ? '启动入口' : '包名' }}</label>
+                                        <input v-model="activeNode.package" placeholder="com.example.app 或 com.example.app/.MainActivity">
+                                    </div>
+                                </template>
+
+                                <!-- Command 执行命令 -->
+                                <template v-if="activeNode.action === 'Command'">
+                                    <div class="field-group">
+                                        <label>执行程序</label>
+                                        <input v-model="activeNode.exec" placeholder="Python 或 {RESOURCE_DIR}/script.py">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>命令参数</label>
+                                        <input v-model="commandArgsInput" placeholder='["arg1","{IMAGE}","{NODE}"]'>
+                                    </div>
+                                    <div class="field-group">
+                                        <div class="checkbox-group">
+                                            <input type="checkbox" v-model="activeNode.detach" id="detach">
+                                            <label for="detach" style="margin-bottom: 0;">分离模式</label>
+                                        </div>
+                                        <div class="field-hint">不等待子进程完成</div>
+                                    </div>
+                                    <div class="field-hint">
+                                        支持参数: {ENTRY},{NODE},{IMAGE},{BOX},{RESOURCE_DIR},{LIBRARY_DIR}
+                                    </div>
+                                </template>
+
+                                <!-- Shell ADB命令 -->
+                                <template v-if="activeNode.action === 'Shell'">
+                                    <div class="field-group">
+                                        <label>Shell命令</label>
+                                        <input v-model="activeNode.cmd" placeholder="getprop ro.build.version.sdk">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>超时时间(ms)</label>
+                                        <input type="number" v-model.number="activeNode.shell_timeout" min="-1" placeholder="20000">
+                                        <div class="field-hint">-1表示无限等待</div>
+                                    </div>
+                                </template>
+
+                                <!-- Screencap 保存截图 -->
+                                <template v-if="activeNode.action === 'Screencap'">
+                                    <div class="field-group">
+                                        <label>文件名</label>
+                                        <input v-model="activeNode.filename" placeholder="可选，默认时间戳_节点名">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>图片格式</label>
+                                        <select v-model="activeNode.format" class="field-input">
+                                            <option value="">默认(png)</option>
+                                            <option value="png">png - 无损</option>
+                                            <option value="jpg">jpg - 有损</option>
+                                            <option value="jpeg">jpeg - 有损</option>
+                                        </select>
+                                    </div>
+                                    <div class="field-group" v-if="activeNode.format === 'jpg' || activeNode.format === 'jpeg'">
+                                        <label>图片质量</label>
+                                        <input type="number" v-model.number="activeNode.quality" min="0" max="100" placeholder="100">
+                                    </div>
+                                </template>
+
+                                <!-- Custom 自定义动作 -->
+                                <template v-if="activeNode.action === 'Custom'">
+                                    <div class="field-group">
+                                        <label>动作名称</label>
+                                        <input v-model="activeNode.custom_action" placeholder="注册的自定义动作名">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>动作参数</label>
+                                        <input v-model="customActionParamInput" placeholder='任意JSON参数'>
+                                    </div>
+                                    <div class="field-group">
+                                        <label>目标位置</label>
+                                        <input v-model="targetInput" placeholder="true/节点名/[x,y]/[x,y,w,h]">
+                                    </div>
+                                    <div class="field-group">
+                                        <label>目标偏移</label>
+                                        <input v-model="targetOffsetInput" placeholder="[x,y,w,h] 可选">
+                                    </div>
+                                </template>
+
+                                <hr style="margin: 15px 0; border: none; border-top: 1px solid #eee;">
+
+                                <!-- 通用选项 -->
+                                <div class="field-group">
+                                    <div class="checkbox-group">
+                                        <input type="checkbox" v-model="activeNode.save_result" id="saveResult">
+                                        <label for="saveResult" style="margin-bottom: 0;">保存识别结果</label>
+                                    </div>
+                                </div>
+                                <div class="field-group">
+                                    <label>超时时间(ms)</label>
+                                    <input type="number" v-model.number="activeNode.timeout" min="0" placeholder="留空使用默认值">
+                                </div>
+                                <div class="field-group">
+                                    <label>前置延时(ms)</label>
+                                    <input type="number" v-model.number="activeNode.pre_delay" min="0" placeholder="0">
+                                </div>
+                                <div class="field-group">
+                                    <label>后置延时(ms)</label>
+                                    <input type="number" v-model.number="activeNode.post_delay" min="0" placeholder="200">
+                                </div>
+                                <div class="field-group">
+                                    <label>执行次数</label>
+                                    <input type="number" v-model.number="activeNode.times" min="1" placeholder="1">
+                                </div>
+
+                                <hr style="margin: 15px 0; border: none; border-top: 1px solid #eee;">
+
+                                <!-- 下一个节点 -->
+                                <div class="field-group">
+                                    <label>下一个节点</label>
+                                    <div class="next-tags">
+                                        <span v-for="(next, idx) in activeNode.next || []" :key="idx" class="next-tag">
+                                            {{ next }}
+                                            <span class="remove" @click="removeNext(idx)">×</span>
+                                        </span>
+                                    </div>
+                                    <div class="add-next-input">
+                                        <input v-model="newNextName" placeholder="输入节点名称" @keyup.enter="addNext">
+                                        <button class="btn btn-primary btn-sm" @click="addNext">添加</button>
+                                    </div>
+                                    <div class="field-hint">节点执行完成后跳转到的下一个节点</div>
+                                </div>
+
+                                <!-- 中断节点 -->
+                                <div class="field-group">
+                                    <label>中断节点</label>
+                                    <div class="next-tags">
+                                        <span v-for="(interrupt, idx) in activeNode.interrupt || []" :key="idx" class="next-tag">
+                                            {{ interrupt }}
+                                            <span class="remove" @click="removeInterrupt(idx)">×</span>
+                                        </span>
+                                    </div>
+                                    <div class="add-next-input">
+                                        <input v-model="newInterruptName" placeholder="输入节点名称" @keyup.enter="addInterrupt">
+                                        <button class="btn btn-primary btn-sm" @click="addInterrupt">添加</button>
+                                    </div>
+                                    <div class="field-hint">每次执行前检查的中断节点列表</div>
+                                </div>
+
+                                <!-- 等待节点 -->
+                                <div class="field-group">
+                                    <label>等待节点</label>
+                                    <div class="next-tags">
+                                        <span v-for="(wait, idx) in activeNode.wait_freezes || []" :key="idx" class="next-tag">
+                                            {{ wait }}
+                                            <span class="remove" @click="removeWaitFreeze(idx)">×</span>
+                                        </span>
+                                    </div>
+                                    <div class="add-next-input">
+                                        <input v-model="newWaitFreezeName" placeholder="输入节点名称" @keyup.enter="addWaitFreeze">
+                                        <button class="btn btn-primary btn-sm" @click="addWaitFreeze">添加</button>
+                                    </div>
+                                    <div class="field-hint">等待画面稳定后再执行</div>
+                                </div>
+
+                                <!-- 反向节点 -->
+                                <div class="field-group">
+                                    <label>反向节点</label>
+                                    <div class="next-tags">
+                                        <span v-for="(reverse, idx) in activeNode.reverse || []" :key="idx" class="next-tag">
+                                            {{ reverse }}
+                                            <span class="remove" @click="removeReverse(idx)">×</span>
+                                        </span>
+                                    </div>
+                                    <div class="add-next-input">
+                                        <input v-model="newReverseName" placeholder="输入节点名称" @keyup.enter="addReverse">
+                                        <button class="btn btn-primary btn-sm" @click="addReverse">添加</button>
+                                    </div>
+                                    <div class="field-hint">当识别失败时跳转的节点列表</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else class="text-muted" style="padding: 40px; text-align: center;">
+                        请从左侧选择或添加一个节点
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @click="toggleJsonView">JSON预览</button>
+                <button class="btn btn-secondary" @click="closeModals">取消</button>
+                <button class="btn btn-primary" @click="saveVisualPipeline">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSON 预览 Modal -->
+    <div class="modal-overlay" v-if="showJsonPreview" @click.self="showJsonPreview = false">
+        <div class="modal large">
+            <h2>JSON 预览</h2>
+            <pre>{{ JSON.stringify(editNodes, null, 2) }}</pre>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @click="showJsonPreview = false">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.message }}</div>
+</div>
+
+<script>
+const { createApp, ref, onMounted, reactive, computed, watch } = Vue;
+
+createApp({
+    setup() {
+        const pipelines = ref([]);
+        const windows = ref([]);
+        const selectedPipeline = ref(null);
+        const connectedHandle = ref(null);
+        const showCreateModal = ref(false);
+        const showEditModal = ref(false);
+        const showJsonPreview = ref(false);
+        const newName = ref('');
+        const editingName = ref('');
+        const editContent = ref('');
+        const lastResult = ref(null);
+        const status = reactive({ connected: false, running: false });
+        const toast = reactive({ show: false, message: '', type: 'success' });
+
+        // 可视化编辑器状态
+        const editNodes = ref({});
+        const images = ref([]);  // 可用的模板图片列表
+        const ocrModels = ref([]);  // OCR模型列表
+        const detectModels = ref([]);  // Detect模型列表
+        const activeNodeName = ref('');
+        const newNextName = ref('');
+        const newInterruptName = ref('');
+        const newWaitFreezeName = ref('');
+        const newReverseName = ref('');
+        const roiInput = ref('');
+        const colorInput = ref('');
+        const keyInput = ref('');
+        const swipeBeginInput = ref('');
+        const swipeEndInput = ref('');
+        const customRecognitionParamInput = ref('');
+        const customActionParamInput = ref('');
+        // 新增输入变量
+        const roiOffsetInput = ref('');
+        const colorLowerInput = ref('');
+        const colorUpperInput = ref('');
+        const thresholdInput = ref('');
+        const labelsInput = ref('');
+        const expectedIndexInput = ref('');
+        const allOfInput = ref('');
+        const anyOfInput = ref('');
+        const replaceInput = ref('');
+        const targetInput = ref('');
+        const targetOffsetInput = ref('');
+        const swipeBeginOffsetInput = ref('');
+        const swipeEndOffsetInput = ref('');
+        const commandArgsInput = ref('');
+
+        // 当前活动节点
+        const activeNode = computed(() => {
+            if (!activeNodeName.value || !editNodes.value[activeNodeName.value]) return null;
+            return editNodes.value[activeNodeName.value];
+        });
+
+        // 节点名称列表（按JSON顺序）
+        const nodeNames = computed(() => {
+            return Object.keys(editNodes.value);
+        });
+
+        // 监听活动节点变化，更新输入框
+        watch(activeNodeName, (newName) => {
+            if (newName && editNodes.value[newName]) {
+                const node = editNodes.value[newName];
+                roiInput.value = node.roi ? JSON.stringify(node.roi) : '';
+                roiOffsetInput.value = node.roi_offset ? JSON.stringify(node.roi_offset) : '';
+                colorInput.value = node.color ? JSON.stringify(node.color) : '';
+                colorLowerInput.value = node.lower ? JSON.stringify(node.lower) : '';
+                colorUpperInput.value = node.upper ? JSON.stringify(node.upper) : '';
+                keyInput.value = node.key !== undefined ? JSON.stringify(node.key) : '';
+                swipeBeginInput.value = node.begin ? JSON.stringify(node.begin) : '';
+                swipeBeginOffsetInput.value = node.begin_offset ? JSON.stringify(node.begin_offset) : '';
+                swipeEndInput.value = node.end ? JSON.stringify(node.end) : '';
+                swipeEndOffsetInput.value = node.end_offset ? JSON.stringify(node.end_offset) : '';
+                customRecognitionParamInput.value = node.custom_recognition_param ? JSON.stringify(node.custom_recognition_param) : '';
+                customActionParamInput.value = node.custom_action_param ? JSON.stringify(node.custom_action_param) : '';
+                // 新增字段
+                thresholdInput.value = node.threshold !== undefined ? String(node.threshold) : '';
+                labelsInput.value = node.labels ? JSON.stringify(node.labels) : '';
+                expectedIndexInput.value = node.expected ? JSON.stringify(node.expected) : '';
+                allOfInput.value = node.allOf ? JSON.stringify(node.allOf) : '';
+                anyOfInput.value = node.anyOf ? JSON.stringify(node.anyOf) : '';
+                replaceInput.value = node.replace ? JSON.stringify(node.replace) : '';
+                targetInput.value = node.target ? JSON.stringify(node.target) : '';
+                targetOffsetInput.value = node.target_offset ? JSON.stringify(node.target_offset) : '';
+                commandArgsInput.value = node.args ? JSON.stringify(node.args) : '';
+            }
+        });
+
+        // 监听输入框变化，更新节点
+        watch(roiInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.roi = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(colorInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.color = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(keyInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.key = val ? JSON.parse(val) : undefined;
+                } catch (e) {
+                    activeNode.value.key = val || undefined;
+                }
+            }
+        });
+
+        watch(swipeBeginInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.begin = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(swipeEndInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.end = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(customRecognitionParamInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.custom_recognition_param = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(customActionParamInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.custom_action_param = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        // 新增输入框监视器
+        watch(roiOffsetInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.roi_offset = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(colorLowerInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.lower = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(colorUpperInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.upper = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(thresholdInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    const parsed = JSON.parse(val);
+                    activeNode.value.threshold = Array.isArray(parsed) ? parsed : parseFloat(val);
+                } catch (e) {
+                    activeNode.value.threshold = val ? parseFloat(val) : undefined;
+                }
+            }
+        });
+
+        watch(labelsInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.labels = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(expectedIndexInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.expected = val ? JSON.parse(val) : undefined;
+                } catch (e) {
+                    activeNode.value.expected = val || undefined;
+                }
+            }
+        });
+
+        watch(allOfInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.allOf = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(anyOfInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.anyOf = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(replaceInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.replace = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(targetInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    const parsed = JSON.parse(val);
+                    activeNode.value.target = parsed;
+                } catch (e) {
+                    // 支持布尔值 true 和字符串节点名
+                    if (val === 'true') {
+                        activeNode.value.target = true;
+                    } else if (val === 'false') {
+                        activeNode.value.target = false;
+                    } else {
+                        activeNode.value.target = val || undefined;
+                    }
+                }
+            }
+        });
+
+        watch(targetOffsetInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.target_offset = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(swipeBeginOffsetInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.begin_offset = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(swipeEndOffsetInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.end_offset = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        watch(commandArgsInput, (val) => {
+            if (activeNode.value) {
+                try {
+                    activeNode.value.args = val ? JSON.parse(val) : undefined;
+                } catch (e) {}
+            }
+        });
+
+        const showToast = (message, type = 'success') => {
+            toast.show = true;
+            toast.message = message;
+            toast.type = type;
+            setTimeout(() => toast.show = false, 3000);
+        };
+
+        const api = async (url, options = {}) => {
+            try {
+                const res = await fetch('/api' + url, {
+                    headers: { 'Content-Type': 'application/json' },
+                    ...options
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || '请求失败');
+                return data;
+            } catch (e) {
+                showToast(e.message, 'error');
+                throw e;
+            }
+        };
+
+        const refreshPipelines = async () => {
+            const data = await api('/pipelines');
+            pipelines.value = data.pipelines || [];
+        };
+
+        const refreshWindows = async () => {
+            const data = await api('/windows');
+            windows.value = data.windows || [];
+        };
+
+        const refreshStatus = async () => {
+            const data = await api('/tasks/status');
+            Object.assign(status, data);
+        };
+
+        const selectPipeline = (name) => {
+            selectedPipeline.value = name;
+        };
+
+        const connectWindow = async (w) => {
+            await api('/windows/connect', {
+                method: 'POST',
+                body: JSON.stringify({ handle: w.handle })
+            });
+            connectedHandle.value = w.handle;
+            showToast('已连接到: ' + w.title);
+            refreshStatus();
+        };
+
+        const executeTask = async (name) => {
+            try {
+                await api('/tasks', {
+                    method: 'POST',
+                    body: JSON.stringify({ task: name })
+                });
+                showToast('任务已启动: ' + name);
+                refreshStatus();
+            } catch (e) {
+                // toast shown by api
+            }
+        };
+
+        // 执行单个节点（先保存再执行）
+        const executeNode = async (nodeName) => {
+            try {
+                // 先保存当前pipeline
+                const cleanNodes = {};
+                for (const [name, node] of Object.entries(editNodes.value)) {
+                    const cleanNode = {};
+                    for (const [key, value] of Object.entries(node)) {
+                        if (value !== undefined && value !== '' && value !== null) {
+                            if (Array.isArray(value) && value.length === 0) continue;
+                            cleanNode[key] = value;
+                        }
+                    }
+                    cleanNodes[name] = cleanNode;
+                }
+
+                await api('/pipelines/' + editingName.value, {
+                    method: 'PUT',
+                    body: JSON.stringify({ content: cleanNodes })
+                });
+
+                // 执行任务
+                await api('/tasks', {
+                    method: 'POST',
+                    body: JSON.stringify({ task: editingName.value })
+                });
+                showToast('执行节点: ' + nodeName);
+                refreshStatus();
+            } catch (e) {
+                showToast('执行失败: ' + e.message, 'error');
+            }
+        };
+
+        const editPipeline = async (name) => {
+            const data = await api('/pipelines/' + name);
+            editingName.value = name;
+            // 深拷贝节点数据
+            editNodes.value = JSON.parse(JSON.stringify(data.content || {}));
+            // 选择第一个节点
+            const nodeNames = Object.keys(editNodes.value);
+            activeNodeName.value = nodeNames.length > 0 ? nodeNames[0] : '';
+            // 获取资源列表
+            await Promise.all([fetchImages(), fetchOcrModels(), fetchDetectModels()]);
+            showEditModal.value = true;
+        };
+
+        // 获取可用图片列表
+        const fetchImages = async () => {
+            try {
+                const data = await api('/images');
+                images.value = data.images || [];
+            } catch (e) {
+                images.value = [];
+            }
+        };
+
+        // 获取OCR模型列表
+        const fetchOcrModels = async () => {
+            try {
+                const data = await api('/models/ocr');
+                ocrModels.value = data.models || [];
+            } catch (e) {
+                ocrModels.value = [];
+            }
+        };
+
+        // 获取Detect模型列表
+        const fetchDetectModels = async () => {
+            try {
+                const data = await api('/models/detect');
+                detectModels.value = data.models || [];
+            } catch (e) {
+                detectModels.value = [];
+            }
+        };
+
+        const selectNode = (name) => {
+            activeNodeName.value = name;
+        };
+
+        const addNode = () => {
+            let baseName = '新节点';
+            let counter = 1;
+            let newName = baseName;
+            while (editNodes.value[newName]) {
+                newName = baseName + '_' + counter;
+                counter++;
+            }
+            editNodes.value[newName] = {
+                recognition: 'DirectHit',
+                action: 'DoNothing'
+            };
+            activeNodeName.value = newName;
+        };
+
+        const renameNode = () => {
+            const oldName = activeNodeName.value;
+            // 如果名称没变
+            if (!oldName) return;
+
+            // 更新所有引用这个节点的 next/interrupt/wait_freezes/reverse
+            for (const [nodeName, node] of Object.entries(editNodes.value)) {
+                if (node.next) {
+                    node.next = node.next.map(n => n === oldName ? activeNodeName.value : n);
+                }
+                if (node.interrupt) {
+                    node.interrupt = node.interrupt.map(n => n === oldName ? activeNodeName.value : n);
+                }
+                if (node.wait_freezes) {
+                    node.wait_freezes = node.wait_freezes.map(n => n === oldName ? activeNodeName.value : n);
+                }
+                if (node.reverse) {
+                    node.reverse = node.reverse.map(n => n === oldName ? activeNodeName.value : n);
+                }
+            }
+        };
+
+        const deleteActiveNode = () => {
+            if (!activeNodeName.value) return;
+            const nodeName = activeNodeName.value;
+            delete editNodes.value[nodeName];
+
+            // 移除所有引用
+            for (const node of Object.values(editNodes.value)) {
+                if (node.next) {
+                    node.next = node.next.filter(n => n !== nodeName);
+                }
+                if (node.interrupt) {
+                    node.interrupt = node.interrupt.filter(n => n !== nodeName);
+                }
+                if (node.wait_freezes) {
+                    node.wait_freezes = node.wait_freezes.filter(n => n !== nodeName);
+                }
+                if (node.reverse) {
+                    node.reverse = node.reverse.filter(n => n !== nodeName);
+                }
+            }
+
+            // 选择另一个节点
+            const nodeNames = Object.keys(editNodes.value);
+            activeNodeName.value = nodeNames.length > 0 ? nodeNames[0] : '';
+        };
+
+        const addNext = () => {
+            if (!newNextName.value || !activeNode.value) return;
+            if (!activeNode.value.next) activeNode.value.next = [];
+            if (!activeNode.value.next.includes(newNextName.value)) {
+                activeNode.value.next.push(newNextName.value);
+            }
+            newNextName.value = '';
+        };
+
+        const removeNext = (idx) => {
+            if (activeNode.value && activeNode.value.next) {
+                activeNode.value.next.splice(idx, 1);
+            }
+        };
+
+        const addInterrupt = () => {
+            if (!newInterruptName.value || !activeNode.value) return;
+            if (!activeNode.value.interrupt) activeNode.value.interrupt = [];
+            if (!activeNode.value.interrupt.includes(newInterruptName.value)) {
+                activeNode.value.interrupt.push(newInterruptName.value);
+            }
+            newInterruptName.value = '';
+        };
+
+        const removeInterrupt = (idx) => {
+            if (activeNode.value && activeNode.value.interrupt) {
+                activeNode.value.interrupt.splice(idx, 1);
+            }
+        };
+
+        const addWaitFreeze = () => {
+            if (!newWaitFreezeName.value || !activeNode.value) return;
+            if (!activeNode.value.wait_freezes) activeNode.value.wait_freezes = [];
+            if (!activeNode.value.wait_freezes.includes(newWaitFreezeName.value)) {
+                activeNode.value.wait_freezes.push(newWaitFreezeName.value);
+            }
+            newWaitFreezeName.value = '';
+        };
+
+        const removeWaitFreeze = (idx) => {
+            if (activeNode.value && activeNode.value.wait_freezes) {
+                activeNode.value.wait_freezes.splice(idx, 1);
+            }
+        };
+
+        const addReverse = () => {
+            if (!newReverseName.value || !activeNode.value) return;
+            if (!activeNode.value.reverse) activeNode.value.reverse = [];
+            if (!activeNode.value.reverse.includes(newReverseName.value)) {
+                activeNode.value.reverse.push(newReverseName.value);
+            }
+            newReverseName.value = '';
+        };
+
+        const removeReverse = (idx) => {
+            if (activeNode.value && activeNode.value.reverse) {
+                activeNode.value.reverse.splice(idx, 1);
+            }
+        };
+
+        const toggleJsonView = () => {
+            showJsonPreview.value = !showJsonPreview.value;
+        };
+
+        const saveVisualPipeline = async () => {
+            try {
+                // 清理空值
+                const cleanNodes = {};
+                for (const [name, node] of Object.entries(editNodes.value)) {
+                    const cleanNode = {};
+                    for (const [key, value] of Object.entries(node)) {
+                        if (value !== undefined && value !== '' && value !== null) {
+                            if (Array.isArray(value) && value.length === 0) continue;
+                            cleanNode[key] = value;
+                        }
+                    }
+                    cleanNodes[name] = cleanNode;
+                }
+
+                await api('/pipelines/' + editingName.value, {
+                    method: 'PUT',
+                    body: JSON.stringify({ content: cleanNodes })
+                });
+                showToast('Pipeline 已保存');
+                closeModals();
+                refreshPipelines();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        };
+
+        const savePipeline = async () => {
+            try {
+                const content = JSON.parse(editContent.value);
+                await api('/pipelines/' + editingName.value, {
+                    method: 'PUT',
+                    body: JSON.stringify({ content })
+                });
+                showToast('Pipeline 已保存');
+                closeModals();
+                refreshPipelines();
+            } catch (e) {
+                showToast('JSON 格式错误', 'error');
+            }
+        };
+
+        const createPipeline = async () => {
+            if (!newName.value) {
+                showToast('请输入名称', 'error');
+                return;
+            }
+            try {
+                await api('/pipelines', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: newName.value, content: {} })
+                });
+                showToast('Pipeline 已创建');
+                // 打开编辑器
+                editingName.value = newName.value;
+                editNodes.value = {};
+                activeNodeName.value = '';
+                // 获取资源列表
+                await Promise.all([fetchImages(), fetchOcrModels(), fetchDetectModels()]);
+                showCreateModal.value = false;
+                showEditModal.value = true;
+                newName.value = '';
+                refreshPipelines();
+            } catch (e) {
+                showToast('创建失败', 'error');
+            }
+        };
+
+        const deletePipeline = async (name) => {
+            if (!confirm('确定删除 ' + name + ' ?')) return;
+            await api('/pipelines/' + name, { method: 'DELETE' });
+            showToast('Pipeline 已删除');
+            refreshPipelines();
+        };
+
+        const closeModals = () => {
+            showCreateModal.value = false;
+            showEditModal.value = false;
+            showJsonPreview.value = false;
+            newName.value = '';
+            editingName.value = '';
+            editContent.value = '';
+            editNodes.value = {};
+            activeNodeName.value = '';
+        };
+
+        onMounted(() => {
+            refreshPipelines();
+            refreshStatus();
+        });
+
+        return {
+            pipelines, windows, selectedPipeline, connectedHandle,
+            showCreateModal, showEditModal, showJsonPreview,
+            newName, editingName, editContent,
+            lastResult, status, toast,
+            // 可视化编辑器
+            editNodes, nodeNames, images, ocrModels, detectModels, activeNodeName, activeNode,
+            newNextName, newInterruptName, newWaitFreezeName, newReverseName,
+            roiInput, colorInput, keyInput,
+            swipeBeginInput, swipeEndInput,
+            customRecognitionParamInput, customActionParamInput,
+            // 新增输入变量
+            roiOffsetInput, colorLowerInput, colorUpperInput,
+            thresholdInput, labelsInput, expectedIndexInput,
+            allOfInput, anyOfInput, replaceInput,
+            targetInput, targetOffsetInput,
+            swipeBeginOffsetInput, swipeEndOffsetInput,
+            commandArgsInput,
+            // 方法
+            refreshPipelines, refreshWindows, selectPipeline,
+            connectWindow, executeTask, executeNode, editPipeline, savePipeline,
+            createPipeline, deletePipeline, closeModals,
+            selectNode, addNode, deleteActiveNode, renameNode,
+            addNext, removeNext, addInterrupt, removeInterrupt,
+            addWaitFreeze, removeWaitFreeze, addReverse, removeReverse,
+            toggleJsonView, saveVisualPipeline, fetchImages, fetchOcrModels, fetchDetectModels
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
