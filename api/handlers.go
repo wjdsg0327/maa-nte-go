@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -22,6 +24,129 @@ func validatePipelineName(name string) error {
 	return nil
 }
 
+func validatePipelineContent(content map[string]interface{}) error {
+	return validatePipelineValue(content, "")
+}
+
+func validatePipelineValue(value interface{}, path string) error {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, child := range typed {
+			childPath := joinPipelinePath(path, key)
+			switch key {
+			case "roi":
+				if err := validateRectField(child, true); err != nil {
+					return fmt.Errorf("%s: %w", childPath, err)
+				}
+			case "roi_offset":
+				if err := validateRectField(child, false); err != nil {
+					return fmt.Errorf("%s: %w", childPath, err)
+				}
+			case "wait_freezes":
+				return fmt.Errorf("%s: wait_freezes is not a Maa route field; use pre_wait_freezes, post_wait_freezes, or repeat_wait_freezes for delays", childPath)
+			case "reverse":
+				return fmt.Errorf("%s: reverse is not a Maa route field; use on_error for failure routing", childPath)
+			}
+			if err := validatePipelineValue(child, childPath); err != nil {
+				return err
+			}
+		}
+	case []interface{}:
+		for idx, child := range typed {
+			if err := validatePipelineValue(child, fmt.Sprintf("%s[%d]", path, idx)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func joinPipelinePath(path string, key string) string {
+	if path == "" {
+		return key
+	}
+	return path + "." + key
+}
+
+func validateRectField(value interface{}, allowString bool) error {
+	if value == nil {
+		return nil
+	}
+
+	if text, ok := value.(string); ok {
+		if allowString && strings.TrimSpace(text) != "" {
+			return nil
+		}
+		if allowString {
+			return fmt.Errorf("must be a non-empty string reference or [x,y,w,h] with 4 integer values")
+		}
+		return fmt.Errorf("must be [x,y,w,h] with 4 integer values")
+	}
+
+	arr, ok := value.([]interface{})
+	if !ok || len(arr) != 4 {
+		return fmt.Errorf("must be [x,y,w,h] with 4 integer values")
+	}
+
+	for _, item := range arr {
+		num, ok := numberValue(item)
+		if !ok || math.Trunc(num) != num {
+			return fmt.Errorf("must be [x,y,w,h] with 4 integer values")
+		}
+	}
+	return nil
+}
+
+func numberValue(value interface{}) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, isFiniteNumber(typed)
+	case float32:
+		num := float64(typed)
+		return num, isFiniteNumber(num)
+	case int:
+		return float64(typed), true
+	case int8:
+		return float64(typed), true
+	case int16:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case uint:
+		return float64(typed), true
+	case uint8:
+		return float64(typed), true
+	case uint16:
+		return float64(typed), true
+	case uint32:
+		return float64(typed), true
+	case uint64:
+		return float64(typed), true
+	case json.Number:
+		num, err := typed.Float64()
+		return num, err == nil && isFiniteNumber(num)
+	default:
+		return 0, false
+	}
+}
+
+func isFiniteNumber(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func rollbackPipelineFile(filePath string, backup []byte, existed bool) error {
+	if existed {
+		if err := os.WriteFile(filePath, backup, 0644); err != nil {
+			return err
+		}
+	} else if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return service.Service.ReloadResources()
+}
+
 // ListPipelines 获取所有 pipeline 列表
 func ListPipelines(c *gin.Context) {
 	files, err := os.ReadDir(pipelineDir)
@@ -34,10 +159,14 @@ func ListPipelines(c *gin.Context) {
 	for _, f := range files {
 		if !f.IsDir() && strings.HasSuffix(f.Name(), ".json") {
 			name := strings.TrimSuffix(f.Name(), ".json")
-			pipelines = append(pipelines, map[string]interface{}{
+			item := map[string]interface{}{
 				"name": name,
 				"file": f.Name(),
-			})
+			}
+			if entry, err := service.ResolvePipelineEntryName(name); err == nil {
+				item["entry"] = entry
+			}
+			pipelines = append(pipelines, item)
 		}
 	}
 
@@ -87,6 +216,11 @@ func CreatePipeline(c *gin.Context) {
 		return
 	}
 
+	if err := validatePipelineContent(req.Content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pipeline content: " + err.Error()})
+		return
+	}
+
 	// 文件名安全检查
 	if err := validatePipelineName(req.Name); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file name"})
@@ -114,6 +248,7 @@ func CreatePipeline(c *gin.Context) {
 
 	// 重新加载资源
 	if err := service.Service.ReloadResources(); err != nil {
+		_ = rollbackPipelineFile(filePath, nil, false)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Pipeline created but resource reload failed: " + err.Error()})
 		return
 	}
@@ -145,7 +280,18 @@ func UpdatePipeline(c *gin.Context) {
 		return
 	}
 
+	if err := validatePipelineContent(req.Content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pipeline content: " + err.Error()})
+		return
+	}
+
 	data, err := json.MarshalIndent(req.Content, "", "  ")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	backup, err := os.ReadFile(filePath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -158,6 +304,7 @@ func UpdatePipeline(c *gin.Context) {
 
 	// 重新加载资源
 	if err := service.Service.ReloadResources(); err != nil {
+		_ = rollbackPipelineFile(filePath, backup, true)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Pipeline updated but resource reload failed: " + err.Error()})
 		return
 	}
@@ -179,6 +326,12 @@ func DeletePipeline(c *gin.Context) {
 		return
 	}
 
+	backup, err := os.ReadFile(filePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := os.Remove(filePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -186,6 +339,7 @@ func DeletePipeline(c *gin.Context) {
 
 	// 重新加载资源
 	if err := service.Service.ReloadResources(); err != nil {
+		_ = rollbackPipelineFile(filePath, backup, true)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Pipeline deleted but resource reload failed: " + err.Error()})
 		return
 	}
@@ -214,6 +368,27 @@ func ExecuteTask(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusAccepted, gin.H{"message": "Task started", "task": req.TaskName})
 	}
+}
+
+// RunTask 同步执行任务并返回 Maa 任务/节点调试详情
+func RunTask(c *gin.Context) {
+	var req struct {
+		TaskName string `json:"task" binding:"required"`
+		NodeName string `json:"node"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := service.Service.ExecuteTask(req.TaskName, req.NodeName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // GetTaskStatus 获取任务状态
@@ -260,6 +435,16 @@ func ConnectWindow(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Connected"})
 }
 
+// GetScreenshot 获取当前连接窗口截图，用于 ROI 框选
+func GetScreenshot(c *gin.Context) {
+	capture, err := service.Service.CaptureScreenshot()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, capture)
+}
+
 // ServeIndex 提供前端页面
 func ServeIndex(c *gin.Context) {
 	c.File("./web/index.html")
@@ -286,17 +471,25 @@ func UploadImage(c *gin.Context) {
 
 // ListImages 获取图片列表
 func ListImages(c *gin.Context) {
-	files, err := os.ReadDir("./resource/image")
-	if err != nil {
+	var images []string
+	imageDir := "./resource/image"
+	if err := filepath.WalkDir(imageDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		rel, err := filepath.Rel(imageDir, path)
+		if err != nil {
+			return err
+		}
+		images = append(images, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-
-	var images []string
-	for _, f := range files {
-		if !f.IsDir() {
-			images = append(images, f.Name())
-		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"images": images})

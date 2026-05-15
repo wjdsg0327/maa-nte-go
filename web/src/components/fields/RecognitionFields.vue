@@ -20,7 +20,10 @@
   <template v-if="hasRoi">
     <div class="field-group">
       <label>ROI区域</label>
-      <input v-model="roiInput" :class="{ invalid: roiError }" placeholder="[x,y,w,h] 或节点名">
+      <div class="roi-input-row">
+        <input v-model="roiInput" :class="{ invalid: roiError }" placeholder="[x,y,w,h] 或节点名">
+        <button class="btn btn-secondary btn-sm" type="button" @click="$emit('pick-roi')">框选</button>
+      </div>
       <div v-if="roiError" class="field-error">{{ roiError }}</div>
       <div class="field-hint">识别区域 [x,y,w,h]，支持负数，0表示延伸到边缘</div>
     </div>
@@ -168,12 +171,8 @@
       </select>
     </div>
     <div class="field-group">
-      <label>颜色下限</label>
-      <input v-model="colorLowerInput" placeholder="[R,G,B] 或 [[R1,G1,B1],...]">
-    </div>
-    <div class="field-group">
-      <label>颜色上限</label>
-      <input v-model="colorUpperInput" placeholder="[R,G,B] 或 [[R1,G1,B1],...]">
+      <label>取色</label>
+      <ColorMatchPicker v-model:lower="node.lower" v-model:upper="node.upper" />
     </div>
     <div class="field-group">
       <label>像素数量阈值</label>
@@ -363,6 +362,7 @@
 
 <script setup>
 import { ref, watch, computed } from 'vue'
+import ColorMatchPicker from '../ColorMatchPicker.vue'
 import {
   appendListItem,
   formatNumberOrList,
@@ -381,6 +381,8 @@ const props = defineProps({
   detectModels: { type: Array, default: () => [] }
 })
 
+defineEmits(['pick-roi'])
+
 // Computed
 const hasRoi = computed(() => {
   return ['DirectHit', 'TemplateMatch', 'FeatureMatch', 'ColorMatch', 'OCR', 'NeuralNetworkClassify', 'NeuralNetworkDetect', 'Custom'].includes(props.node.recognition)
@@ -391,8 +393,6 @@ const roiInput = ref('')
 const roiOffsetInput = ref('')
 const roiError = ref('')
 const roiOffsetError = ref('')
-const colorLowerInput = ref('')
-const colorUpperInput = ref('')
 const replaceInput = ref('')
 const labelsInput = ref('')
 const expectedIndexInput = ref('')
@@ -442,8 +442,6 @@ watch(() => props.node, (node) => {
   roiOffsetError.value = ''
   roiInput.value = formatRoiValue(node.roi)
   roiOffsetInput.value = formatRoiValue(node.roi_offset)
-  colorLowerInput.value = node.lower ? JSON.stringify(node.lower) : ''
-  colorUpperInput.value = node.upper ? JSON.stringify(node.upper) : ''
   replaceInput.value = node.replace ? JSON.stringify(node.replace) : ''
   labelsInput.value = node.labels ? JSON.stringify(node.labels) : ''
   expectedIndexInput.value = node.expected ? JSON.stringify(node.expected) : ''
@@ -452,6 +450,22 @@ watch(() => props.node, (node) => {
   anyOfInput.value = node.anyOf ? JSON.stringify(node.anyOf) : ''
   customRecognitionParamInput.value = node.custom_recognition_param ? JSON.stringify(node.custom_recognition_param) : ''
 }, { immediate: true })
+
+watch(() => props.node.roi, (value) => {
+  const formatted = formatRoiValue(value)
+  if (formatted !== roiInput.value) {
+    roiError.value = ''
+    roiInput.value = formatted
+  }
+})
+
+watch(() => props.node.roi_offset, (value) => {
+  const formatted = formatRoiValue(value)
+  if (formatted !== roiOffsetInput.value) {
+    roiOffsetError.value = ''
+    roiOffsetInput.value = formatted
+  }
+})
 
 // Sync inputs to node
 watch(roiInput, (val) => {
@@ -463,12 +477,6 @@ watch(roiOffsetInput, (val) => {
   const result = parseRectArrayValue(val, 'ROI offset')
   roiOffsetError.value = result.error
   if (!result.error) props.node.roi_offset = result.value
-})
-watch(colorLowerInput, (val) => {
-  try { props.node.lower = val ? JSON.parse(val) : undefined } catch (e) {}
-})
-watch(colorUpperInput, (val) => {
-  try { props.node.upper = val ? JSON.parse(val) : undefined } catch (e) {}
 })
 watch(replaceInput, (val) => {
   try { props.node.replace = val ? JSON.parse(val) : undefined } catch (e) {}

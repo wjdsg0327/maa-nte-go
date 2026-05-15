@@ -20,7 +20,10 @@
       >
         <div class="pipeline-header">
           <span class="pipeline-chip">RUN</span>
-          <h3>{{ p.name }}</h3>
+          <div>
+            <h3>{{ p.name }}</h3>
+            <p v-if="p.entry && p.entry !== p.name" class="pipeline-entry">入口: {{ p.entry }}</p>
+          </div>
         </div>
         <div class="actions">
           <button class="btn btn-success" @click.stop="$emit('execute', p.name)">执行</button>

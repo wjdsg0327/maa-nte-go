@@ -51,6 +51,36 @@ export function serializeNumberOrList(value) {
   return Number.isFinite(number) ? number : undefined
 }
 
+export function formatNumberOrObject(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (value && typeof value === 'object' && !Array.isArray(value)) return JSON.stringify(value)
+  if (typeof value === 'string') return value
+  return ''
+}
+
+export function parseNumberOrObjectValue(value, label = '字段') {
+  const input = textValue(value)
+  if (!input) return { value: undefined, error: '' }
+
+  if (input.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(input)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { value: undefined, error: `${label} 需要填写非负整数或 JSON 对象` }
+      }
+      return { value: parsed, error: '' }
+    } catch (e) {
+      return { value: undefined, error: `${label} JSON 格式不正确` }
+    }
+  }
+
+  const number = Number(input)
+  if (!Number.isInteger(number) || number < 0) {
+    return { value: undefined, error: `${label} 需要填写非负整数或 JSON 对象` }
+  }
+  return { value: number, error: '' }
+}
+
 function rectError(label) {
   return `${label} 需要填写 [x,y,w,h]，4 个值都必须是整数`
 }

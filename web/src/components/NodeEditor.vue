@@ -17,6 +17,7 @@
             :images="images"
             :ocr-models="ocrModels"
             :detect-models="detectModels"
+            @pick-roi="$emit('pick-roi')"
           />
         </section>
 
@@ -54,5 +55,5 @@ defineProps({
   allNodes: { type: Array, default: () => [] }
 })
 
-defineEmits(['update:name', 'delete'])
+defineEmits(['update:name', 'delete', 'pick-roi'])
 </script>

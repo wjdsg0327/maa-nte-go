@@ -56,6 +56,7 @@ func main() {
 
 		// 任务执行
 		apiGroup.POST("/tasks", api.ExecuteTask)
+		apiGroup.POST("/tasks/run", api.RunTask)
 		apiGroup.GET("/tasks/status", api.GetTaskStatus)
 		apiGroup.POST("/tasks/stop", api.StopTask)
 
@@ -65,6 +66,7 @@ func main() {
 
 		// 节点列表
 		apiGroup.GET("/nodes", api.GetNodeList)
+		apiGroup.GET("/screenshot", api.GetScreenshot)
 
 		// 图片管理
 		apiGroup.GET("/images", api.ListImages)

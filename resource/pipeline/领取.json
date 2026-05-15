@@ -2,17 +2,13 @@
   "领取": {
     "action": "ClickKey",
     "key": 27,
-    "next": [
-      "领取_点击都市大亨"
-    ],
+    "next": "领取_点击都市大亨",
     "recognition": "DirectHit"
   },
   "领取_72小时": {
     "action": "Click",
     "expected": "72小时",
-    "next": [
-      "领取_点击补货"
-    ],
+    "next": "领取_点击补货",
     "recognition": "OCR",
     "save_draw": true,
     "save_result": true,
@@ -20,10 +16,14 @@
   },
   "领取_咖舍": {
     "action": "Click",
-    "next": [
-      "领取_提取收益"
-    ],
+    "next": "领取_提取收益",
     "recognition": "TemplateMatch",
+    "roi": [
+      178,
+      174,
+      693,
+      507
+    ],
     "template": [
       "咖舍.png",
       "咖舍2.png"
@@ -31,27 +31,21 @@
   },
   "领取_提取收益": {
     "action": "Click",
-    "next": [
-      "领取_确定"
-    ],
+    "next": "领取_确定",
     "recognition": "TemplateMatch",
     "template": "提取收益.png"
   },
   "领取_点击空白区域关闭": {
     "action": "Click",
     "expected": "点击空白区域关闭",
-    "next": [
-      "领取_补货"
-    ],
+    "next": "领取_补货",
     "recognition": "OCR",
     "save_result": true
   },
   "领取_点击补货": {
     "action": "Click",
     "expected": "补货",
-    "next": [
-      "领取_点击送货上门"
-    ],
+    "next": "领取_点击送货上门",
     "recognition": "OCR",
     "save_result": true,
     "threshold": 0.8
@@ -59,48 +53,53 @@
   "领取_点击送货上门": {
     "action": "Click",
     "expected": "送货上门",
-    "next": [
-      "领取_送货上门确定"
-    ],
+    "next": "领取_送货上门确定",
     "recognition": "OCR",
     "save_result": true,
     "threshold": 0.8
   },
   "领取_点击都市大亨": {
     "action": "Click",
-    "next": [
-      "领取_咖舍"
-    ],
+    "next": "领取_咖舍",
     "recognition": "TemplateMatch",
     "template": "都市大亨.png"
   },
   "领取_确定": {
     "action": "Click",
     "expected": "确定",
-    "next": [
-      "领取_点击空白区域关闭"
-    ],
+    "next": "领取_点击空白区域关闭",
     "recognition": "OCR",
     "save_result": true
   },
   "领取_补货": {
     "action": "Click",
-    "next": [
-      "领取_72小时"
-    ],
+    "next": "领取_72小时",
+    "on_error": "领取_返回桌面",
     "recognition": "TemplateMatch",
     "save_draw": true,
     "template": "补货.png"
   },
+  "领取_返回桌面": {
+    "action": "ClickKey",
+    "key": 27,
+    "next": "领取_返回桌面2",
+    "recognition": "DirectHit"
+  },
+  "领取_返回桌面2": {
+    "action": "ClickKey",
+    "key": 27,
+    "recognition": "DirectHit"
+  },
   "领取_送货上门确定": {
     "action": "Click",
     "expected": "确认",
+    "next": "领取_返回桌面",
     "recognition": "OCR",
     "roi": [
-      983,
-      260,
-      169,
-      388
+      251,
+      399,
+      688,
+      176
     ],
     "save_draw": true,
     "save_result": true,

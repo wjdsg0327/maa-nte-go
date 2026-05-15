@@ -343,12 +343,15 @@ func (s *MaaService) finishTask(err error) {
 
 func (s *MaaService) executeReservedTask(taskName string, nodeName string) (map[string]interface{}, error) {
 	// 如果指定了节点名，使用节点名作为入口执行
-	entryTask := taskName
+	entryTask, err := resolvePipelineEntryFile(taskName)
+	if err != nil {
+		return nil, err
+	}
 	if nodeName != "" {
 		entryTask = nodeName
 		log.Printf("开始执行节点: %s (pipeline: %s)", nodeName, taskName)
 	} else {
-		log.Printf("开始执行任务: %s", taskName)
+		log.Printf("开始执行任务: %s (entry: %s)", taskName, entryTask)
 	}
 
 	taskJob := s.tasker.PostTask(entryTask)
@@ -360,22 +363,22 @@ func (s *MaaService) executeReservedTask(taskName string, nodeName string) (map[
 
 	// 获取结果
 	result := map[string]interface{}{
-		"task":   taskName,
-		"status": status.String(),
+		"task":       taskName,
+		"entry":      entryTask,
+		"status":     status.String(),
+		"node_count": 0,
 	}
 
-	// 获取节点详情 - 注意：GetLatestNode 对中文节点名可能有编码问题
-	// 使用 TaskJob.GetDetail() 获取任务详情，再获取节点信息
 	taskDetail, err := taskJob.GetDetail()
 	if err == nil && taskDetail != nil && len(taskDetail.Nodes) > 0 {
-		// 获取最后一个节点的详情
+		result["task_detail"] = serializeTaskDetail(taskDetail)
+		result["node_count"] = len(taskDetail.Nodes)
+
 		lastNodeRef := taskDetail.Nodes[len(taskDetail.Nodes)-1]
 		nodeDetail, err := lastNodeRef.GetDetail()
 		if err == nil && nodeDetail != nil {
-			nodeInfo := map[string]interface{}{
-				"name":    nodeDetail.Name,
-				"success": nodeDetail.RunCompleted,
-			}
+			nodeInfo := serializeNodeDetail(nodeDetail)
+			nodeInfo["success"] = nodeDetail.RunCompleted
 
 			// 识别结果
 			if nodeDetail.Recognition != nil && nodeDetail.Recognition.Results != nil {

@@ -106,7 +106,7 @@
   <template v-if="['ClickKey', 'LongPressKey'].includes(node.action)">
     <div class="field-group">
       <label>按键</label>
-      <input v-model="keyInput" placeholder="27 或 [27,13]">
+      <KeyboardKeyPicker v-model="node.key" multiple />
     </div>
     <div class="field-group" v-if="node.action === 'LongPressKey'">
       <label>长按时长(ms)</label>
@@ -118,7 +118,7 @@
   <template v-if="['KeyDown', 'KeyUp'].includes(node.action)">
     <div class="field-group">
       <label>按键</label>
-      <input type="number" v-model.number="node.key" placeholder="虚拟按键码">
+      <KeyboardKeyPicker v-model="node.key" />
     </div>
   </template>
 
@@ -253,6 +253,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import KeyboardKeyPicker from '../KeyboardKeyPicker.vue'
 
 const props = defineProps({
   node: { type: Object, required: true }
@@ -265,7 +266,6 @@ const swipeBeginInput = ref('')
 const swipeBeginOffsetInput = ref('')
 const swipeEndInput = ref('')
 const swipeEndOffsetInput = ref('')
-const keyInput = ref('')
 const commandArgsInput = ref('')
 const customActionParamInput = ref('')
 
@@ -277,7 +277,6 @@ watch(() => props.node, (node) => {
   swipeBeginOffsetInput.value = node.begin_offset ? JSON.stringify(node.begin_offset) : ''
   swipeEndInput.value = node.end ? JSON.stringify(node.end) : ''
   swipeEndOffsetInput.value = node.end_offset ? JSON.stringify(node.end_offset) : ''
-  keyInput.value = node.key !== undefined ? JSON.stringify(node.key) : ''
   commandArgsInput.value = node.args ? JSON.stringify(node.args) : ''
   customActionParamInput.value = node.custom_action_param ? JSON.stringify(node.custom_action_param) : ''
 }, { immediate: true })
@@ -307,9 +306,6 @@ watch(swipeEndInput, (val) => {
 })
 watch(swipeEndOffsetInput, (val) => {
   try { props.node.end_offset = val ? JSON.parse(val) : undefined } catch (e) {}
-})
-watch(keyInput, (val) => {
-  try { props.node.key = val ? JSON.parse(val) : undefined } catch (e) { props.node.key = val || undefined }
 })
 watch(commandArgsInput, (val) => {
   try { props.node.args = val ? JSON.parse(val) : undefined } catch (e) {}

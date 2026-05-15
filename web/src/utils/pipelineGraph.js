@@ -1,5 +1,11 @@
+import {
+  getRelationGraphTargetName,
+  getRelationTargets,
+} from './pipelineRelations.js'
+
 const LINK_FIELDS = [
   ['next', 'next'],
+  ['on_error', 'error'],
   ['interrupt', 'interrupt'],
   ['wait_freezes', 'wait'],
   ['reverse', 'reverse'],
@@ -10,9 +16,10 @@ export function buildGraphLinks(nodes) {
 
   for (const [name, node] of Object.entries(nodes || {})) {
     for (const [field, type] of LINK_FIELDS) {
-      const targets = Array.isArray(node?.[field]) ? node[field] : []
+      const targets = getRelationTargets(node?.[field])
       for (const target of targets) {
-        if (nodes?.[target]) links.push({ from: name, to: target, type })
+        const targetName = getRelationGraphTargetName(target)
+        if (nodes?.[targetName]) links.push({ from: name, to: targetName, type })
       }
     }
   }
@@ -24,8 +31,9 @@ export function getRootNodes(nodes) {
   const nextChildren = new Set()
 
   for (const node of Object.values(nodes || {})) {
-    if (Array.isArray(node?.next)) {
-      node.next.forEach((target) => nextChildren.add(target))
+    for (const target of getRelationTargets(node?.next)) {
+      const targetName = getRelationGraphTargetName(target)
+      if (targetName) nextChildren.add(targetName)
     }
   }
 
@@ -47,9 +55,9 @@ export function layoutGraph(nodes, options = {}) {
     visited.add(name)
     positions[name] = { x, y }
 
-    const children = Array.isArray(nodes[name].next)
-      ? nodes[name].next.filter((child) => nodes[child])
-      : []
+    const children = getRelationTargets(nodes[name].next)
+      .map(getRelationGraphTargetName)
+      .filter((child) => nodes[child])
 
     if (children.length === 0) return x + nodeWidth + gapX
 

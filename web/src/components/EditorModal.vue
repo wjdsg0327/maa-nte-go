@@ -36,6 +36,7 @@
             :all-nodes="Object.keys(localNodes)"
             @update:name="renameNode"
             @delete="deleteActiveNode"
+            @pick-roi="openRoiPicker"
           />
           <div v-else class="editor-empty">
             <div class="empty-icon">+</div>
@@ -46,18 +47,33 @@
         </div>
       </div>
       <div class="modal-actions">
+        <span v-if="roiPickerError" class="inline-error">{{ roiPickerError }}</span>
         <button class="btn btn-secondary" @click="$emit('preview')">JSON预览</button>
         <button class="btn btn-success" v-if="activeNodeName" @click="executeNode(activeNodeName)">执行当前节点</button>
+        <button class="btn btn-secondary" v-if="roiPickerLoading" disabled>截图中...</button>
         <button class="btn btn-primary" @click="save">保存</button>
       </div>
     </div>
   </div>
+  <RoiPickerModal
+    v-if="showRoiPicker && roiScreenshot"
+    :screenshot="roiScreenshot"
+    :initial-roi="Array.isArray(activeNode?.roi) ? activeNode.roi : []"
+    @close="showRoiPicker = false"
+    @apply="applyPickedRoi"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch, reactive } from 'vue'
 import PipelineFlowBoard from './PipelineFlowBoard.vue'
 import NodeEditor from './NodeEditor.vue'
+import RoiPickerModal from './RoiPickerModal.vue'
+import { resourceApi } from '../api/index.js'
+import {
+  removeRelationTargetName,
+  renameRelationTarget,
+} from '../utils/pipelineRelations.js'
 
 const props = defineProps({
   name: { type: String, required: true },
@@ -68,10 +84,15 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'save', 'preview', 'execute'])
+const RELATION_FIELDS = ['next', 'on_error', 'interrupt']
 
 // Local copy of nodes for editing
 const localNodes = ref(JSON.parse(JSON.stringify(props.nodes)))
 const activeNodeName = ref('')
+const showRoiPicker = ref(false)
+const roiScreenshot = ref(null)
+const roiPickerLoading = ref(false)
+const roiPickerError = ref('')
 
 // Watch for external nodes changes
 watch(() => props.nodes, (newNodes) => {
@@ -124,10 +145,15 @@ const renameNode = (newName) => {
 
   // Update all references
   for (const n of Object.values(newNodes)) {
-    if (n.next) n.next = n.next.map(x => x === oldName ? newName : x)
-    if (n.interrupt) n.interrupt = n.interrupt.map(x => x === oldName ? newName : x)
-    if (n.wait_freezes) n.wait_freezes = n.wait_freezes.map(x => x === oldName ? newName : x)
-    if (n.reverse) n.reverse = n.reverse.map(x => x === oldName ? newName : x)
+    for (const field of RELATION_FIELDS) {
+      if (n[field] === undefined) continue
+      const updated = renameRelationTarget(n[field], oldName, newName)
+      if (updated === undefined) {
+        delete n[field]
+      } else {
+        n[field] = updated
+      }
+    }
   }
 
   localNodes.value = newNodes
@@ -141,15 +167,41 @@ const deleteActiveNode = () => {
 
   // Remove all references
   for (const node of Object.values(localNodes.value)) {
-    if (node.next) node.next = node.next.filter(n => n !== nodeName)
-    if (node.interrupt) node.interrupt = node.interrupt.filter(n => n !== nodeName)
-    if (node.wait_freezes) node.wait_freezes = node.wait_freezes.filter(n => n !== nodeName)
-    if (node.reverse) node.reverse = node.reverse.filter(n => n !== nodeName)
+    for (const field of RELATION_FIELDS) {
+      if (node[field] === undefined) continue
+      const updated = removeRelationTargetName(node[field], nodeName)
+      if (updated === undefined) {
+        delete node[field]
+      } else {
+        node[field] = updated
+      }
+    }
   }
 
   // Select another node
   const names = Object.keys(localNodes.value)
   activeNodeName.value = names.length > 0 ? names[0] : ''
+}
+
+const openRoiPicker = async () => {
+  if (!activeNode.value || roiPickerLoading.value) return
+  roiPickerError.value = ''
+  roiPickerLoading.value = true
+  try {
+    roiScreenshot.value = await resourceApi.screenshot()
+    showRoiPicker.value = true
+  } catch (e) {
+    roiPickerError.value = e.message
+  } finally {
+    roiPickerLoading.value = false
+  }
+}
+
+const applyPickedRoi = (roi) => {
+  if (activeNode.value) {
+    activeNode.value.roi = roi
+  }
+  showRoiPicker.value = false
 }
 
 const executeNode = (nodeName) => {

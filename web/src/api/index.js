@@ -20,6 +20,7 @@ export const pipelineApi = {
 
 export const taskApi = {
   execute: (task, node) => api('/tasks', { method: 'POST', body: JSON.stringify({ task, node }) }),
+  run: (task, node) => api('/tasks/run', { method: 'POST', body: JSON.stringify({ task, node }) }),
   status: () => api('/tasks/status'),
   stop: () => api('/tasks/stop', { method: 'POST' })
 }
@@ -33,5 +34,6 @@ export const resourceApi = {
   images: () => api('/images'),
   ocrModels: () => api('/models/ocr'),
   detectModels: () => api('/models/detect'),
-  nodes: () => api('/nodes')
+  nodes: () => api('/nodes'),
+  screenshot: () => api('/screenshot')
 }

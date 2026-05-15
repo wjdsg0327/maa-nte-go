@@ -28,6 +28,39 @@ func TestExecuteTaskReturnsErrorWhenServiceCannotStart(t *testing.T) {
 	}
 }
 
+func TestRunTaskReturnsErrorWhenServiceCannotRun(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.POST("/tasks/run", RunTask)
+
+	req := httptest.NewRequest(http.MethodPost, "/tasks/run", bytes.NewBufferString(`{"task":"Startup"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected service run failure status %d, got %d with body %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetScreenshotReturnsBadRequestWhenDisconnected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.GET("/screenshot", GetScreenshot)
+
+	req := httptest.NewRequest(http.MethodGet, "/screenshot", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected disconnected screenshot status %d, got %d with body %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+}
+
 func TestUpdatePipelineRejectsPathLikeName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -145,5 +178,72 @@ func TestUpdatePipelineRejectsInvalidRoiBeforeWrite(t *testing.T) {
 	}
 	if string(got) != string(original) {
 		t.Fatalf("expected invalid ROI to keep original file, got %s", string(got))
+	}
+}
+
+func TestValidatePipelineContentRejectsLegacyRouteFields(t *testing.T) {
+	err := validatePipelineContent(map[string]interface{}{
+		"Start": map[string]interface{}{
+			"recognition":  "DirectHit",
+			"wait_freezes": []interface{}{"Next"},
+		},
+	})
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("wait_freezes")) {
+		t.Fatalf("expected wait_freezes validation error, got %v", err)
+	}
+
+	err = validatePipelineContent(map[string]interface{}{
+		"Start": map[string]interface{}{
+			"recognition": "DirectHit",
+			"reverse":     []interface{}{"Retry"},
+		},
+	})
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("on_error")) {
+		t.Fatalf("expected reverse migration guidance, got %v", err)
+	}
+}
+
+func TestListImagesIncludesNestedRelativePaths(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	tempDir := t.TempDir()
+	imageDir := filepath.Join(tempDir, "resource", "image")
+	if err := os.MkdirAll(filepath.Join(imageDir, "F1"), 0755); err != nil {
+		t.Fatalf("create nested image dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(imageDir, "root.png"), []byte("root"), 0644); err != nil {
+		t.Fatalf("write root image: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(imageDir, "F1", "F1.png"), []byte("nested"), 0644); err != nil {
+		t.Fatalf("write nested image: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("chdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(cwd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+
+	router := gin.New()
+	router.GET("/images", ListImages)
+
+	req := httptest.NewRequest(http.MethodGet, "/images", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected image list status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"F1/F1.png"`)) {
+		t.Fatalf("expected nested image path with forward slash, got %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"root.png"`)) {
+		t.Fatalf("expected root image path, got %s", rec.Body.String())
 	}
 }

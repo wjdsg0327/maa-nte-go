@@ -3,9 +3,11 @@ import { describe, it } from 'node:test'
 
 import {
   appendListItem,
+  formatNumberOrObject,
   formatNumberOrList,
   formatRoiValue,
   normalizeStringList,
+  parseNumberOrObjectValue,
   parseRectArrayValue,
   parseRoiValue,
   serializeNumberOrList,
@@ -38,6 +40,23 @@ describe('pipeline field helpers', () => {
     assert.equal(serializeNumberOrList('0.72'), 0.72)
     assert.deepEqual(serializeNumberOrList('[0.7, 0.8]'), [0.7, 0.8])
     assert.equal(serializeNumberOrList('bad'), undefined)
+  })
+
+  it('formats and parses Maa uint-or-object wait fields', () => {
+    assert.equal(formatNumberOrObject(undefined), '')
+    assert.equal(formatNumberOrObject(500), '500')
+    assert.equal(formatNumberOrObject({ time: 500, threshold: 0.95 }), '{"time":500,"threshold":0.95}')
+
+    assert.deepEqual(parseNumberOrObjectValue('500', '静止等待'), {
+      value: 500,
+      error: '',
+    })
+    assert.deepEqual(parseNumberOrObjectValue('{"time":500,"threshold":0.95}', '静止等待'), {
+      value: { time: 500, threshold: 0.95 },
+      error: '',
+    })
+    assert.match(parseNumberOrObjectValue('-1', '静止等待').error, /静止等待/)
+    assert.match(parseNumberOrObjectValue('[500]', '静止等待').error, /静止等待/)
   })
 
   it('formats and parses ROI values as arrays or string references', () => {

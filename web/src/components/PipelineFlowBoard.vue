@@ -15,6 +15,9 @@
           <marker id="board-arrow-next" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
             <path d="M0,0 L0,6 L9,3 z" fill="#252a3d"/>
           </marker>
+          <marker id="board-arrow-error" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#ff9d2e"/>
+          </marker>
           <marker id="board-arrow-interrupt" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
             <path d="M0,0 L0,6 L9,3 z" fill="#ff5f74"/>
           </marker>
@@ -72,9 +75,8 @@
 
       <div class="flow-legend flow-board-legend">
         <span class="legend-item"><span class="legend-line next"></span> Next</span>
+        <span class="legend-item"><span class="legend-line error"></span> On Error</span>
         <span class="legend-item"><span class="legend-line interrupt"></span> Interrupt</span>
-        <span class="legend-item"><span class="legend-line wait"></span> Wait</span>
-        <span class="legend-item"><span class="legend-line reverse"></span> Reverse</span>
       </div>
 
       <div v-if="visibleNames.length === 0" class="flow-empty empty-state">
@@ -138,7 +140,7 @@ const getPath = (link) => {
     return `M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}`
   }
 
-  const offset = link.type === 'interrupt' ? 18 : link.type === 'wait' ? -18 : link.type === 'reverse' ? 30 : 0
+  const offset = link.type === 'error' ? -18 : link.type === 'interrupt' ? 18 : 0
   return `M${x1 + offset},${y1} C${x1 + offset},${midY} ${x2 + offset},${midY} ${x2},${y2}`
 }
 

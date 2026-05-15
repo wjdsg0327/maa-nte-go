@@ -1,145 +1,109 @@
 <template>
-  <!-- Next Nodes -->
-  <div class="field-group">
-    <label>下一个节点</label>
+  <div
+    v-for="config in relationConfigs"
+    :key="config.field"
+    class="field-group"
+  >
+    <label>{{ config.label }}</label>
     <div class="next-tags">
-      <span v-for="(next, idx) in node.next || []" :key="idx" class="next-tag">
-        {{ next }}
-        <span class="remove" @click="removeNext(idx)">×</span>
+      <span
+        v-for="(item, idx) in relationItems(config.field)"
+        :key="`${config.field}-${idx}-${relationLabel(item)}`"
+        class="next-tag"
+      >
+        {{ relationLabel(item) }}
+        <span class="remove" @click="removeRelation(config.field, idx)">×</span>
       </span>
     </div>
     <div class="add-next-input">
-      <select v-model="newNextName" class="field-input" style="flex: 1;">
+      <select v-model="newRelationNames[config.field]" class="field-input" style="flex: 1;">
         <option value="">选择节点...</option>
         <option v-for="n in availableNodes" :key="n" :value="n">{{ n }}</option>
       </select>
-      <button class="btn btn-primary btn-sm" @click="addNext" :disabled="!newNextName">添加</button>
+      <button
+        class="btn btn-primary btn-sm"
+        @click="addRelation(config.field)"
+        :disabled="!newRelationNames[config.field]"
+      >
+        添加
+      </button>
     </div>
-    <div class="field-hint">节点执行完成后跳转到的下一个节点</div>
-  </div>
-
-  <!-- Interrupt Nodes -->
-  <div class="field-group">
-    <label>中断节点</label>
-    <div class="next-tags">
-      <span v-for="(item, idx) in node.interrupt || []" :key="idx" class="next-tag">
-        {{ item }}
-        <span class="remove" @click="removeInterrupt(idx)">×</span>
-      </span>
-    </div>
-    <div class="add-next-input">
-      <select v-model="newInterruptName" class="field-input" style="flex: 1;">
-        <option value="">选择节点...</option>
-        <option v-for="n in availableNodes" :key="n" :value="n">{{ n }}</option>
-      </select>
-      <button class="btn btn-primary btn-sm" @click="addInterrupt" :disabled="!newInterruptName">添加</button>
-    </div>
-    <div class="field-hint">每次执行前检查的中断节点列表</div>
-  </div>
-
-  <!-- Wait Freezes Nodes -->
-  <div class="field-group">
-    <label>等待节点</label>
-    <div class="next-tags">
-      <span v-for="(item, idx) in node.wait_freezes || []" :key="idx" class="next-tag">
-        {{ item }}
-        <span class="remove" @click="removeWaitFreeze(idx)">×</span>
-      </span>
-    </div>
-    <div class="add-next-input">
-      <select v-model="newWaitFreezeName" class="field-input" style="flex: 1;">
-        <option value="">选择节点...</option>
-        <option v-for="n in availableNodes" :key="n" :value="n">{{ n }}</option>
-      </select>
-      <button class="btn btn-primary btn-sm" @click="addWaitFreeze" :disabled="!newWaitFreezeName">添加</button>
-    </div>
-    <div class="field-hint">等待画面稳定后再执行</div>
-  </div>
-
-  <!-- Reverse Nodes -->
-  <div class="field-group">
-    <label>反向节点</label>
-    <div class="next-tags">
-      <span v-for="(item, idx) in node.reverse || []" :key="idx" class="next-tag">
-        {{ item }}
-        <span class="remove" @click="removeReverse(idx)">×</span>
-      </span>
-    </div>
-    <div class="add-next-input">
-      <select v-model="newReverseName" class="field-input" style="flex: 1;">
-        <option value="">选择节点...</option>
-        <option v-for="n in availableNodes" :key="n" :value="n">{{ n }}</option>
-      </select>
-      <button class="btn btn-primary btn-sm" @click="addReverse" :disabled="!newReverseName">添加</button>
-    </div>
-    <div class="field-hint">当识别失败时跳转的节点列表</div>
+    <div class="field-hint">{{ config.hint }}</div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { computed, reactive } from 'vue'
+import {
+  addRelationTarget,
+  getRelationDisplayName,
+  getRelationTargets,
+  removeRelationTargetAt,
+} from '../../utils/pipelineRelations.js'
 
 const props = defineProps({
   node: { type: Object, required: true },
   allNodes: { type: Array, default: () => [] }
 })
 
-const newNextName = ref('')
-const newInterruptName = ref('')
-const newWaitFreezeName = ref('')
-const newReverseName = ref('')
+const relationConfigs = [
+  {
+    field: 'next',
+    label: '下一节点',
+    hint: '节点动作完成后，按顺序识别并进入的候选节点。',
+  },
+  {
+    field: 'on_error',
+    label: '失败节点',
+    hint: '当前节点动作失败，或 next 候选超时未命中时进入的节点。',
+  },
+  {
+    field: 'interrupt',
+    label: '中断节点（旧版）',
+    hint: 'Maa 5.1 已废弃 interrupt；旧项目可保留，新流程推荐使用 next 的 JumpBack 节点属性。',
+  },
+]
+
+const newRelationNames = reactive({
+  next: '',
+  on_error: '',
+  interrupt: '',
+})
 
 const availableNodes = computed(() => props.allNodes)
 
-const addNext = () => {
-  if (!newNextName.value) return
-  if (!props.node.next) props.node.next = []
-  if (!props.node.next.includes(newNextName.value)) {
-    props.node.next.push(newNextName.value)
+const setRelationField = (field, value) => {
+  if (value === undefined) {
+    delete props.node[field]
+  } else {
+    props.node[field] = value
   }
-  newNextName.value = ''
 }
 
-const removeNext = (idx) => {
-  if (props.node.next) props.node.next.splice(idx, 1)
-}
+const relationItems = (field) => getRelationTargets(props.node[field])
 
-const addInterrupt = () => {
-  if (!newInterruptName.value) return
-  if (!props.node.interrupt) props.node.interrupt = []
-  if (!props.node.interrupt.includes(newInterruptName.value)) {
-    props.node.interrupt.push(newInterruptName.value)
+const relationLabel = (item) => {
+  const name = getRelationDisplayName(item)
+  const attrs = []
+
+  if (typeof item === 'string') {
+    if (item.startsWith('[JumpBack]')) attrs.push('JumpBack')
+    if (item.startsWith('[Anchor]')) attrs.push('Anchor')
+  } else {
+    if (item?.jump_back) attrs.push('JumpBack')
+    if (item?.anchor) attrs.push('Anchor')
   }
-  newInterruptName.value = ''
+
+  return attrs.length > 0 ? `${name} · ${attrs.join('/')}` : name
 }
 
-const removeInterrupt = (idx) => {
-  if (props.node.interrupt) props.node.interrupt.splice(idx, 1)
+const addRelation = (field) => {
+  const nextValue = addRelationTarget(props.node[field], newRelationNames[field])
+  setRelationField(field, nextValue)
+  newRelationNames[field] = ''
 }
 
-const addWaitFreeze = () => {
-  if (!newWaitFreezeName.value) return
-  if (!props.node.wait_freezes) props.node.wait_freezes = []
-  if (!props.node.wait_freezes.includes(newWaitFreezeName.value)) {
-    props.node.wait_freezes.push(newWaitFreezeName.value)
-  }
-  newWaitFreezeName.value = ''
-}
-
-const removeWaitFreeze = (idx) => {
-  if (props.node.wait_freezes) props.node.wait_freezes.splice(idx, 1)
-}
-
-const addReverse = () => {
-  if (!newReverseName.value) return
-  if (!props.node.reverse) props.node.reverse = []
-  if (!props.node.reverse.includes(newReverseName.value)) {
-    props.node.reverse.push(newReverseName.value)
-  }
-  newReverseName.value = ''
-}
-
-const removeReverse = (idx) => {
-  if (props.node.reverse) props.node.reverse.splice(idx, 1)
+const removeRelation = (field, idx) => {
+  setRelationField(field, removeRelationTargetAt(props.node[field], idx))
 }
 </script>

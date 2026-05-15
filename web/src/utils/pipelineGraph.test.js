@@ -12,7 +12,7 @@ describe('pipeline graph helpers', () => {
     Start: { recognition: 'OCR', action: 'Click', next: ['Done'], interrupt: ['Abort'] },
     Done: { recognition: 'DirectHit', action: 'DoNothing', reverse: ['Retry'] },
     Abort: { recognition: 'TemplateMatch', action: 'StopTask' },
-    Retry: { recognition: 'DirectHit', action: 'Click', wait_freezes: ['Done'] },
+    Retry: { recognition: 'DirectHit', action: 'Click', on_error: ['Done'] },
   }
 
   it('builds all visible relation links', () => {
@@ -20,7 +20,7 @@ describe('pipeline graph helpers', () => {
       { from: 'Start', to: 'Done', type: 'next' },
       { from: 'Start', to: 'Abort', type: 'interrupt' },
       { from: 'Done', to: 'Retry', type: 'reverse' },
-      { from: 'Retry', to: 'Done', type: 'wait' },
+      { from: 'Retry', to: 'Done', type: 'error' },
     ])
   })
 
@@ -35,5 +35,21 @@ describe('pipeline graph helpers', () => {
     assert.equal(layout.positions.Done.y, 208)
     assert.equal(layout.width >= 472, true)
     assert.equal(layout.height >= 324, true)
+  })
+
+  it('reads Maa string and NodeAttr relation targets', () => {
+    const mixedNodes = {
+      Start: { recognition: 'DirectHit', next: 'Middle' },
+      Middle: { recognition: 'DirectHit', next: { name: 'End', jump_back: true } },
+      End: { recognition: 'DirectHit', on_error: [{ name: 'Start' }] },
+    }
+
+    assert.deepEqual(buildGraphLinks(mixedNodes), [
+      { from: 'Start', to: 'Middle', type: 'next' },
+      { from: 'Middle', to: 'End', type: 'next' },
+      { from: 'End', to: 'Start', type: 'error' },
+    ])
+    assert.deepEqual(getRootNodes(mixedNodes), ['Start'])
+    assert.deepEqual(layoutGraph(mixedNodes).positions.Middle.y, 208)
   })
 })

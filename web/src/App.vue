@@ -79,6 +79,7 @@ import CreateModal from './components/CreateModal.vue'
 import EditorModal from './components/EditorModal.vue'
 import JsonPreviewModal from './components/JsonPreviewModal.vue'
 import Toast from './components/Toast.vue'
+import { cleanPipelineNodes } from './utils/pipelineClean.js'
 
 // State
 const pipelines = ref([])
@@ -151,8 +152,9 @@ const connectWindow = async (w) => {
 
 const executeTask = async (name) => {
   try {
-    await taskApi.execute(name)
-    showToast('任务已启动: ' + name)
+    const data = await taskApi.run(name)
+    lastResult.value = data
+    showToast('任务执行完成: ' + name)
     refreshStatus()
   } catch (e) {
     showToast(e.message, 'error')
@@ -235,17 +237,7 @@ const deletePipeline = async (name) => {
 
 const saveVisualPipeline = async (nodes) => {
   try {
-    const cleanNodes = {}
-    for (const [name, node] of Object.entries(nodes)) {
-      const cleanNode = {}
-      for (const [key, value] of Object.entries(node)) {
-        if (value !== undefined && value !== '' && value !== null) {
-          if (Array.isArray(value) && value.length === 0) continue
-          cleanNode[key] = value
-        }
-      }
-      cleanNodes[name] = cleanNode
-    }
+    const cleanNodes = cleanPipelineNodes(nodes)
     await pipelineApi.update(editingName.value, cleanNodes)
     showToast('Pipeline 已保存')
     showEditModal.value = false
@@ -259,22 +251,13 @@ const saveVisualPipeline = async (nodes) => {
 const executeNodeFromEditor = async ({ nodes, nodeName }) => {
   try {
     // 先保存
-    const cleanNodes = {}
-    for (const [name, node] of Object.entries(nodes)) {
-      const cleanNode = {}
-      for (const [key, value] of Object.entries(node)) {
-        if (value !== undefined && value !== '' && value !== null) {
-          if (Array.isArray(value) && value.length === 0) continue
-          cleanNode[key] = value
-        }
-      }
-      cleanNodes[name] = cleanNode
-    }
+    const cleanNodes = cleanPipelineNodes(nodes)
     await pipelineApi.update(editingName.value, cleanNodes)
 
     // 再执行指定节点
-    await taskApi.execute(editingName.value, nodeName)
-    showToast('执行节点: ' + nodeName)
+    const data = await taskApi.run(editingName.value, nodeName)
+    lastResult.value = data
+    showToast('节点执行完成: ' + nodeName)
     refreshStatus()
   } catch (e) {
     showToast('执行失败: ' + e.message, 'error')
