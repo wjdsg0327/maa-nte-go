@@ -10,6 +10,9 @@ import (
 	"sync"
 	"unsafe"
 
+	"study/one/config"
+	"study/one/custom"
+
 	"github.com/MaaXYZ/maa-framework-go/v4"
 	"github.com/MaaXYZ/maa-framework-go/v4/controller/win32"
 )
@@ -23,26 +26,42 @@ type MaaService struct {
 	running    bool
 	lastTask   string
 	lastError  string
+	config     *config.MaaConfig
 }
 
 var Service = &MaaService{}
 
 // Init 初始化 MaaFramework
 func (s *MaaService) Init() error {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %v", err)
+	}
+	return s.InitWithConfig(cfg)
+}
+
+func (s *MaaService) InitWithConfig(cfg *config.MaaConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.inited {
 		return nil
 	}
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	s.config = cfg
 
-	libDir, err := filepath.Abs("./MaaFramework/bin")
+	libDir, err := filepath.Abs(cfg.LibDir)
 	if err != nil {
 		return fmt.Errorf("解析库目录失败: %v", err)
 	}
 
 	// 设置日志目录，带标记的识别图片会保存到 log/vision 目录
-	logDir, _ := filepath.Abs("./log")
+	logDir, err := filepath.Abs(cfg.LogDir)
+	if err != nil {
+		return fmt.Errorf("解析日志目录失败: %v", err)
+	}
 	// 确保日志目录存在
 	os.MkdirAll(logDir, 0755)
 	os.MkdirAll(filepath.Join(logDir, "vision"), 0755)
@@ -50,9 +69,9 @@ func (s *MaaService) Init() error {
 	if err := maa.Init(
 		maa.WithLibDir(libDir),
 		maa.WithLogDir(logDir),
-		maa.WithSaveDraw(true), // 启用保存带标记的识别结果图片
-		maa.WithStdoutLevel(maa.LoggingLevelInfo),
-		maa.WithDebugMode(true),
+		maa.WithSaveDraw(cfg.SaveDraw),
+		maa.WithStdoutLevel(maa.LoggingLevel(cfg.StdoutLevel)),
+		maa.WithDebugMode(cfg.DebugMode),
 	); err != nil {
 		return fmt.Errorf("maa 初始化失败: %v", err)
 	}
@@ -60,7 +79,10 @@ func (s *MaaService) Init() error {
 	visionDir := filepath.Join(logDir, "vision")
 	log.Printf("识别结果图片将保存到: %s", visionDir)
 
-	userDir, _ := filepath.Abs(".")
+	userDir, err := filepath.Abs(cfg.ConfigDir)
+	if err != nil {
+		return fmt.Errorf("解析工具包配置目录失败: %v", err)
+	}
 	if err := maa.ConfigInitOption(userDir, "{}"); err != nil {
 		return fmt.Errorf("工具包配置失败: %v", err)
 	}
@@ -93,8 +115,9 @@ func (s *MaaService) Init() error {
 	s.inited = true
 	log.Println("MaaFramework 初始化成功")
 
-	// 自动连接目标窗口
-	go s.autoConnectTargetWindow("异环")
+	if cfg.AutoConnect && strings.TrimSpace(cfg.TargetWindowTitle) != "" {
+		go s.autoConnectTargetWindow(cfg.TargetWindowTitle)
+	}
 
 	return nil
 }
@@ -241,7 +264,7 @@ func (s *MaaService) ReloadResources() error {
 }
 
 func (s *MaaService) loadResourcesLocked() error {
-	resPath, err := filepath.Abs("./resource")
+	resPath, err := filepath.Abs(s.resourceDirLocked())
 	if err != nil {
 		return fmt.Errorf("解析资源目录失败: %v", err)
 	}
@@ -269,7 +292,64 @@ func (s *MaaService) loadResourcesLocked() error {
 	if !s.resource.Loaded() {
 		return errors.New("资源加载未完成或失败")
 	}
+	if err := s.registerCustomHandlersLocked(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (s *MaaService) registerCustomHandlersLocked() error {
+	if err := s.resource.RegisterCustomRecognition("ExampleRecognition", &custom.ExampleRecognition{}); err != nil {
+		return fmt.Errorf("注册 ExampleRecognition 失败: %v", err)
+	}
+	if err := s.resource.RegisterCustomAction("ExampleAction", &custom.ExampleAction{}); err != nil {
+		return fmt.Errorf("注册 ExampleAction 失败: %v", err)
+	}
+	return nil
+}
+
+func (s *MaaService) resourceDirLocked() string {
+	if s.config != nil && strings.TrimSpace(s.config.ResourceDir) != "" {
+		return s.config.ResourceDir
+	}
+	return config.DefaultConfig().ResourceDir
+}
+
+func (s *MaaService) ResourceDir() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.resourceDirLocked()
+}
+
+func (s *MaaService) ResourcePath(parts ...string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg := s.config
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	return cfg.ResourcePath(parts...)
+}
+
+func (s *MaaService) ConfigSnapshot() map[string]interface{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cfg := s.config
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	return map[string]interface{}{
+		"libDir":            cfg.LibDir,
+		"resourceDir":       cfg.ResourceDir,
+		"logDir":            cfg.LogDir,
+		"targetWindowTitle": cfg.TargetWindowTitle,
+		"autoConnect":       cfg.AutoConnect,
+		"saveDraw":          cfg.SaveDraw,
+		"debugMode":         cfg.DebugMode,
+		"stdoutLevel":       cfg.StdoutLevel,
+		"serverAddr":        cfg.ServerAddr,
+	}
 }
 
 func waitMaaJob(name string, job *maa.Job) error {
@@ -343,7 +423,7 @@ func (s *MaaService) finishTask(err error) {
 
 func (s *MaaService) executeReservedTask(taskName string, nodeName string) (map[string]interface{}, error) {
 	// 如果指定了节点名，使用节点名作为入口执行
-	entryTask, err := resolvePipelineEntryFile(taskName)
+	entryTask, err := s.resolvePipelineEntryFile(taskName)
 	if err != nil {
 		return nil, err
 	}

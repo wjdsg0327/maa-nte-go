@@ -15,7 +15,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const pipelineDir = "./resource/pipeline"
+func pipelineDir() string {
+	return service.Service.ResourcePath("pipeline")
+}
+
+func imageDir() string {
+	return service.Service.ResourcePath("image")
+}
+
+func ocrDir() string {
+	return service.Service.ResourcePath("ocr")
+}
+
+func detectDir() string {
+	return service.Service.ResourcePath("detect")
+}
 
 func validatePipelineName(name string) error {
 	if name == "" || strings.ContainsAny(name, "/\\:*?\"<>|") || name == "." || name == ".." {
@@ -147,10 +161,26 @@ func rollbackPipelineFile(filePath string, backup []byte, existed bool) error {
 	return service.Service.ReloadResources()
 }
 
+func GetConfig(c *gin.Context) {
+	c.JSON(http.StatusOK, service.Service.ConfigSnapshot())
+}
+
+func ReloadResources(c *gin.Context) {
+	if err := service.Service.ReloadResources(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Resources reloaded"})
+}
+
 // ListPipelines 获取所有 pipeline 列表
 func ListPipelines(c *gin.Context) {
-	files, err := os.ReadDir(pipelineDir)
+	files, err := os.ReadDir(pipelineDir())
 	if err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusOK, gin.H{"pipelines": []map[string]interface{}{}})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -180,7 +210,7 @@ func GetPipeline(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file name"})
 		return
 	}
-	filePath := filepath.Join(pipelineDir, name+".json")
+	filePath := filepath.Join(pipelineDir(), name+".json")
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -227,7 +257,12 @@ func CreatePipeline(c *gin.Context) {
 		return
 	}
 
-	filePath := filepath.Join(pipelineDir, req.Name+".json")
+	if err := os.MkdirAll(pipelineDir(), 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	filePath := filepath.Join(pipelineDir(), req.Name+".json")
 
 	// 检查是否已存在
 	if _, err := os.Stat(filePath); err == nil {
@@ -263,7 +298,7 @@ func UpdatePipeline(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file name"})
 		return
 	}
-	filePath := filepath.Join(pipelineDir, name+".json")
+	filePath := filepath.Join(pipelineDir(), name+".json")
 
 	// 检查是否存在
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -319,7 +354,7 @@ func DeletePipeline(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file name"})
 		return
 	}
-	filePath := filepath.Join(pipelineDir, name+".json")
+	filePath := filepath.Join(pipelineDir(), name+".json")
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Pipeline not found"})
@@ -459,7 +494,17 @@ func UploadImage(c *gin.Context) {
 	}
 
 	filename := filepath.Base(file.Filename)
-	dst := filepath.Join("./resource/image", filename)
+	if filename == "." || filename == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file name"})
+		return
+	}
+
+	dir := imageDir()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	dst := filepath.Join(dir, filename)
 
 	if err := c.SaveUploadedFile(file, dst); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -472,8 +517,8 @@ func UploadImage(c *gin.Context) {
 // ListImages 获取图片列表
 func ListImages(c *gin.Context) {
 	var images []string
-	imageDir := "./resource/image"
-	if err := filepath.WalkDir(imageDir, func(path string, d os.DirEntry, err error) error {
+	dir := imageDir()
+	if err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -481,13 +526,17 @@ func ListImages(c *gin.Context) {
 			return nil
 		}
 
-		rel, err := filepath.Rel(imageDir, path)
+		rel, err := filepath.Rel(dir, path)
 		if err != nil {
 			return err
 		}
 		images = append(images, filepath.ToSlash(rel))
 		return nil
 	}); err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusOK, gin.H{"images": []string{}})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -526,9 +575,12 @@ func ReadFile(c *gin.Context) {
 
 // ListOcrModels 获取OCR模型列表
 func ListOcrModels(c *gin.Context) {
-	ocrDir := "./resource/ocr"
-	files, err := os.ReadDir(ocrDir)
+	files, err := os.ReadDir(ocrDir())
 	if err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusOK, gin.H{"models": []string{}})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -549,8 +601,7 @@ func ListOcrModels(c *gin.Context) {
 
 // ListDetectModels 获取Detect模型列表
 func ListDetectModels(c *gin.Context) {
-	detectDir := "./resource/detect"
-	files, err := os.ReadDir(detectDir)
+	files, err := os.ReadDir(detectDir())
 	if err != nil {
 		// 目录不存在返回空列表
 		c.JSON(http.StatusOK, gin.H{"models": []string{}})

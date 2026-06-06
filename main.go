@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"study/one/api"
+	"study/one/config"
 	"study/one/service"
 
 	"github.com/gin-gonic/gin"
@@ -17,8 +18,13 @@ import (
 var embeddedFiles embed.FS
 
 func main() {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalf("加载配置失败: %v", err)
+	}
+
 	// 初始化 MaaFramework
-	if err := service.Service.Init(); err != nil {
+	if err := service.Service.InitWithConfig(cfg); err != nil {
 		log.Fatalf("初始化失败: %v", err)
 	}
 
@@ -47,6 +53,8 @@ func main() {
 	// API 路由
 	apiGroup := r.Group("/api")
 	{
+		apiGroup.GET("/config", api.GetConfig)
+
 		// Pipeline 管理
 		apiGroup.GET("/pipelines", api.ListPipelines)
 		apiGroup.GET("/pipelines/:name", api.GetPipeline)
@@ -67,6 +75,7 @@ func main() {
 		// 节点列表
 		apiGroup.GET("/nodes", api.GetNodeList)
 		apiGroup.GET("/screenshot", api.GetScreenshot)
+		apiGroup.POST("/resources/reload", api.ReloadResources)
 
 		// 图片管理
 		apiGroup.GET("/images", api.ListImages)
@@ -110,6 +119,8 @@ func main() {
 		log.Println("生产模式：使用嵌入的前端资源")
 	}
 
-	log.Println("服务器启动: http://localhost:8080")
-	r.Run(":8080")
+	log.Printf("服务器启动: %s", cfg.ServerAddr)
+	if err := r.Run(cfg.ServerAddr); err != nil {
+		log.Fatalf("服务器启动失败: %v", err)
+	}
 }

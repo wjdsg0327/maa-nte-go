@@ -1,0 +1,18 @@
+{
+  "LibDir": "./MaaFramework/bin",
+  "ResourceDir": "./resource",
+  "LogDir": "./log",
+  "ConfigDir": ".",
+  "TargetWindowTitle": "",
+  "AutoConnect": false,
+  "SaveDraw": true,
+  "DebugMode": true,
+  "StdoutLevel": 2,
+  "ServerAddr": ":8080",
+  "AdbPath": "adb",
+  "AdbAddress": "127.0.0.1:5555",
+  "AgentPath": "./MaaAgentBinary",
+  "Screencap": "RawByNc",
+  "Input": "MaaTouch",
+  "AdbConfig": "{}"
+}

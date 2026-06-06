@@ -10,11 +10,15 @@ import (
 )
 
 func resolvePipelineEntryFile(pipelineName string) (string, error) {
+	return Service.resolvePipelineEntryFile(pipelineName)
+}
+
+func (s *MaaService) resolvePipelineEntryFile(pipelineName string) (string, error) {
 	if pipelineName == "" {
 		return "", fmt.Errorf("任务名不能为空")
 	}
 
-	filePath := filepath.Join("resource", "pipeline", pipelineName+".json")
+	filePath := s.ResourcePath("pipeline", pipelineName+".json")
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("读取 Pipeline 文件失败: %w", err)

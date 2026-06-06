@@ -30,10 +30,15 @@ export const windowApi = {
   connect: (handle) => api('/windows/connect', { method: 'POST', body: JSON.stringify({ handle }) })
 }
 
+export const appApi = {
+  config: () => api('/config')
+}
+
 export const resourceApi = {
   images: () => api('/images'),
   ocrModels: () => api('/models/ocr'),
   detectModels: () => api('/models/detect'),
   nodes: () => api('/nodes'),
-  screenshot: () => api('/screenshot')
+  screenshot: () => api('/screenshot'),
+  reload: () => api('/resources/reload', { method: 'POST' })
 }

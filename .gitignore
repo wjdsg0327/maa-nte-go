@@ -2,3 +2,6 @@ tmpclaude*
 .claude
 .idea
 MaaFramework
+node_modules/
+web/node_modules/
+log/
